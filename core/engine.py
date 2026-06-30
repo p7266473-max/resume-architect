@@ -1,10 +1,8 @@
 import json
 import logging
-import re
 import time
 from typing import Any, Optional
 
-import streamlit as st
 from google import genai
 from google.genai import types
 
@@ -21,196 +19,131 @@ from core.prompts import (
 
 logger = logging.getLogger("resume_architect")
 
-@st.cache_resource(show_spinner=False)
 def get_gemini_client(api_key: str) -> genai.Client:
-    """Instantiate and cache the Gemini client for the given API key."""
-    logger.info("Initialising new Gemini client.")
+    """Initialise and return the Gemini API client."""
     return genai.Client(api_key=api_key)
-
-def clean_json_text(raw: str) -> str:
-    """Strip markdown fences from LLM output."""
-    s = raw.strip()
-    s = re.sub(r"^```(?:json)?\s*", "", s)
-    s = re.sub(r"\s*```$", "", s)
-    return s.strip()
-
-def validate_resume_data(data: dict) -> dict:
-    """Ensure all required keys exist with correct types; patch missing values."""
-    if not isinstance(data, dict):
-        data = {}
-
-    # Contact fields
-    for field in ("Name", "Email", "Phone", "LinkedIn", "Location"):
-        if not isinstance(data.get(field), str):
-            data[field] = ""
-
-    # Summary
-    if not isinstance(data.get("Summary"), str) or not data["Summary"].strip():
-        data["Summary"] = "Accomplished professional with a proven track record of delivering results."
-
-    # Experience
-    if not isinstance(data.get("Experience"), list):
-        data["Experience"] = []
-    validated_exp: list[dict] = []
-    for exp in data["Experience"]:
-        if not isinstance(exp, dict):
-            continue
-        validated_exp.append({
-            "Role": str(exp.get("Role", "Professional")),
-            "Company": str(exp.get("Company", "Organisation")),
-            "Duration": str(exp.get("Duration", "")),
-            "Achievements": [str(a) for a in exp.get("Achievements", []) if a],
-        })
-    data["Experience"] = validated_exp
-
-    # Skills / Education
-    for key in ("Skills", "Education"):
-        if not isinstance(data.get(key), list):
-            data[key] = []
-        data[key] = [str(v) for v in data[key] if v]
-
-    return data
 
 def call_gemini_with_retry(
     client: genai.Client,
-    system_prompt: str,
-    user_prompt: str,
-    temperature: float,
-    status_ph: Any,
-    step_label: str,
-    use_schema: bool = False,
+    prompt: str,
+    system_instruction: str,
+    tools: Optional[list] = None,
+    response_schema: Optional[types.Schema] = None,
+    status_ph: Any = None,
 ) -> Optional[str]:
-    """Call Gemini with retry logic. Returns raw response text or None."""
+    """Execute a Gemini API call with exponential backoff and structured output support."""
+    config_kwargs = {
+        "system_instruction": system_instruction,
+        "temperature": 0.3,
+    }
+    if tools:
+        config_kwargs["tools"] = tools
+    if response_schema:
+        config_kwargs["response_mime_type"] = "application/json"
+        config_kwargs["response_schema"] = response_schema
+
+    config = types.GenerateContentConfig(**config_kwargs)
+
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            logger.info("%s — attempt %d/%d", step_label, attempt, MAX_RETRIES)
-            status_ph.info(f"🔄 {step_label} — attempt {attempt}/{MAX_RETRIES}…")
-
-            config_kwargs: dict = {
-                "system_instruction": system_prompt,
-                "temperature": temperature,
-            }
-            if use_schema:
-                config_kwargs["response_mime_type"] = "application/json"
-                config_kwargs["response_schema"] = RESUME_SCHEMA
-            else:
-                config_kwargs["response_mime_type"] = "application/json"
-
+            logger.info("Calling Gemini API (Attempt %d/%d)...", attempt, MAX_RETRIES)
             response = client.models.generate_content(
                 model=GEMINI_MODEL,
-                contents=user_prompt,
-                config=types.GenerateContentConfig(**config_kwargs),
+                contents=prompt,
+                config=config,
             )
-
-            if response and response.text:
-                logger.info("%s — success on attempt %d", step_label, attempt)
-                return response.text
-
-            status_ph.warning(f"⚠️ {step_label} — empty response. Retrying…")
-
+            return response.text
         except Exception as exc:
-            msg = str(exc).lower()
-            logger.error("%s — error: %s", step_label, exc)
-
-            if any(k in msg for k in ("api key", "api_key", "permission denied", "invalid_api_key")):
-                st.error("🔑 **Invalid API Key.** Please check your Gemini API key in the sidebar.")
+            logger.warning("Attempt %d failed: %s", attempt, exc)
+            if status_ph:
+                status_ph.warning(f"API attempt {attempt} failed. Retrying...")
+            if attempt == MAX_RETRIES:
+                logger.error("All Gemini API attempts failed.")
+                if status_ph:
+                    status_ph.error(f"❌ API Error: {exc}")
                 return None
-            if any(k in msg for k in ("quota", "resource_exhausted", "429")):
-                st.error("📊 **Quota exceeded.** Please wait or check your Gemini plan.")
-                return None
-            if any(k in msg for k in ("timeout", "deadline")):
-                status_ph.warning(f"⏱️ {step_label} — timeout on attempt {attempt}. Retrying…")
-            elif any(k in msg for k in ("network", "connection", "unavailable")):
-                status_ph.warning(f"🌐 {step_label} — network error on attempt {attempt}. Retrying…")
-            else:
-                status_ph.warning(f"⚠️ {step_label} — {exc}. Retrying…")
-
-        if attempt < MAX_RETRIES:
-            time.sleep(RETRY_DELAY_SECONDS * attempt)
-
-    st.error(f"❌ {step_label} failed after {MAX_RETRIES} attempts.")
+            time.sleep(RETRY_DELAY_SECONDS ** attempt)
     return None
 
 def run_research_pass(
     client: genai.Client,
-    raw_input: str,
+    target_roles: list[str],
     status_ph: Any,
 ) -> str:
-    """Pre-pass: Access Google Search via Gemini API to find standard, high-impact resume patterns,
-    keywords, and formats relevant to the candidate's career history."""
-    step_label = "Web Research — Gathering industry best practices"
-    status_ph.info(f"🔄 {step_label}…")
-    logger.info(step_label)
+    """Pass 0: Use Google Search to find the best free courses/certifications for the target roles."""
+    roles_str = ", ".join(target_roles)
+    contents = (
+        f"The user is a BSc Computer Science student aiming to become one of the following in 2-3 years: {roles_str}.\n\n"
+        "Search the web for the absolute best, highly-recognized FREE or open-source online courses, bootcamps, and certifications "
+        "(e.g., from freeCodeCamp, Harvard CS50, AWS Educate, Google Cloud Skill Boost, DeepLearning.AI via financial aid, OSSU) "
+        "that are mandatory or highly recommended for these specific roles. Summarize the best 3-5 free courses they should take."
+    )
     
-    try:
-        config = types.GenerateContentConfig(
-            system_instruction="You are an expert recruiter and resume researcher. Use Google Search to find top executive resume templates, action verbs, industry-specific ATS keywords, and structure standards relevant to the candidate's raw career history. Summarize the best-in-class resume rules and metrics patterns to guide the resume generation process.",
-            tools=[types.Tool(google_search=types.GoogleSearch())],
-            temperature=0.3,
-        )
-        contents = f"Here is the candidate's raw career history:\n\n{raw_input}\n\nSearch for the best executive resumes, structures, achievements, and keywords corresponding to this career path/role, and summarize how to write an elite resume for them."
-        
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=contents,
-            config=config,
-        )
-        if response and response.text:
-            logger.info("Web research complete.")
-            return response.text
-    except Exception as exc:
-        logger.warning("Web research pass failed: %s. Proceeding without search grounding.", exc)
-        
-    return "Standard executive resume guidelines: Quantifiable STAR achievements, strong action verbs, clean formatting, and clear sections."
+    tools = [types.Tool(google_search=types.GoogleSearch())]
+    
+    result = call_gemini_with_retry(
+        client=client,
+        prompt=contents,
+        system_instruction="You are a career research assistant using Google Search to find high-value FREE tech courses.",
+        tools=tools,
+        status_ph=status_ph
+    )
+    return result or "No research data found."
 
 def run_extraction_pass(
     client: genai.Client,
-    raw_input: str,
+    target_roles: list[str],
     research_summary: str,
     status_ph: Any,
 ) -> Optional[dict]:
-    """Pass 1: Extract structured resume data using Gemini structured output."""
-    raw = call_gemini_with_retry(
-        client, PASS1_SYSTEM_PROMPT,
-        PASS1_USER_TEMPLATE.format(raw_input=raw_input, research_summary=research_summary),
-        temperature=0.3,
-        status_ph=status_ph,
-        step_label="Pass 1 — Extracting structured content",
-        use_schema=True,
+    """Pass 1: Generate the Future Resume JSON based on selected roles and free course research."""
+    prompt = PASS1_USER_TEMPLATE.format(
+        research_summary=research_summary,
+        target_roles=", ".join(target_roles)
     )
-    if raw is None:
+
+    result_text = call_gemini_with_retry(
+        client=client,
+        prompt=prompt,
+        system_instruction=PASS1_SYSTEM_PROMPT,
+        response_schema=RESUME_SCHEMA,
+        status_ph=status_ph
+    )
+    
+    if not result_text:
         return None
+        
     try:
-        parsed = json.loads(clean_json_text(raw))
-        logger.info("Pass 1 parsed successfully.")
-        return validate_resume_data(parsed)
+        return json.loads(result_text)
     except json.JSONDecodeError as exc:
-        logger.error("Pass 1 JSON decode error: %s", exc)
-        st.error("❌ Pass 1 returned invalid JSON. Please try again.")
+        logger.error("Pass 1 JSON parse failed: %s", exc)
+        if status_ph:
+            status_ph.error("❌ Failed to parse AI output (Pass 1).")
         return None
 
 def run_enhancement_pass(
     client: genai.Client,
-    extracted: dict,
+    extracted_data: dict,
     status_ph: Any,
 ) -> dict:
-    """Pass 2: Enhance writing quality whilst preserving schema."""
-    raw = call_gemini_with_retry(
-        client, PASS2_SYSTEM_PROMPT,
-        PASS2_USER_TEMPLATE.format(input_json=json.dumps(extracted, indent=2)),
-        temperature=0.2,
-        status_ph=status_ph,
-        step_label="Pass 2 — Enhancing executive language",
-        use_schema=True,
+    """Pass 2: Elevate the generated future resume to an elite standard."""
+    input_json = json.dumps(extracted_data, indent=2)
+    prompt = PASS2_USER_TEMPLATE.format(input_json=input_json)
+    
+    result_text = call_gemini_with_retry(
+        client=client,
+        prompt=prompt,
+        system_instruction=PASS2_SYSTEM_PROMPT,
+        response_schema=RESUME_SCHEMA,
+        status_ph=status_ph
     )
-    if raw is None:
-        logger.warning("Pass 2 failed — falling back to Pass 1 output.")
-        return extracted
+    
+    if not result_text:
+        logger.warning("Pass 2 failed, falling back to Pass 1 data.")
+        return extracted_data
+        
     try:
-        parsed = json.loads(clean_json_text(raw))
-        logger.info("Pass 2 parsed successfully.")
-        return validate_resume_data(parsed)
-    except json.JSONDecodeError:
-        logger.warning("Pass 2 invalid JSON — using Pass 1 output.")
-        st.warning("⚠️ Pass 2 returned invalid JSON — using Pass 1 output.")
-        return extracted
+        return json.loads(result_text)
+    except json.JSONDecodeError as exc:
+        logger.error("Pass 2 JSON parse failed: %s", exc)
+        return extracted_data

@@ -1,13 +1,12 @@
 """
-Resume Architect Factory — v2.0 (Premium Executive UI Edition)
+Future Resume Architect (BSc Computer Science Edition)
 ==============================================================
-Production-ready Streamlit application that transforms raw career history
-into executive-quality resumes using Google Gemini AI.
+Production-ready Streamlit application that generates a 3-year future resume
+for students, including free open-source courses they need to complete.
 """
 
 import logging
 import os
-import time
 
 import streamlit as st
 
@@ -16,9 +15,7 @@ from core.prompts import (
     APP_SUBTITLE,
     APP_ICON,
     THEMES,
-    PLACEHOLDER_TEXT,
-    MIN_INPUT_CHARS,
-    MAX_INPUT_CHARS,
+    CAREER_OPTIONS,
 )
 from core.engine import (
     get_gemini_client,
@@ -27,8 +24,6 @@ from core.engine import (
     run_enhancement_pass,
 )
 from core.doc_maker import (
-    extract_text_from_docx,
-    extract_text_from_pdf,
     generate_docx_bytes,
     generate_markdown,
     generate_ats_text,
@@ -66,7 +61,7 @@ st.markdown("""
 
   html, body, .stApp {
     font-family: 'Inter', sans-serif !important;
-    background: #FAFAFA; /* Elegant very light gray/white */
+    background: #FAFAFA;
     color: #1A1A1A;
   }
 
@@ -74,7 +69,7 @@ st.markdown("""
   .hero-container {
     text-align: center;
     padding: 3rem 1rem 2rem;
-    background: url('https://images.unsplash.com/photo-1497215728101-856f4ea42174?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80') no-repeat center center;
+    background: url('https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80') no-repeat center center;
     background-size: cover;
     border-radius: 20px;
     box-shadow: 0 20px 40px rgba(0,0,0,0.08);
@@ -91,7 +86,7 @@ st.markdown("""
     border-radius: 16px;
     margin: 1rem auto;
     max-width: 850px;
-    border: 1px solid rgba(212, 175, 55, 0.4); /* Subtle gold border */
+    border: 1px solid rgba(212, 175, 55, 0.4);
     box-shadow: 0 10px 30px rgba(0,0,0,0.05);
   }
 
@@ -99,14 +94,14 @@ st.markdown("""
     font-family: 'Playfair Display', serif;
     font-size: 3.8rem;
     font-weight: 700;
-    color: #0A192F; /* Deep Navy */
+    color: #0A192F;
     letter-spacing: -0.5px;
     line-height: 1.2;
     margin-bottom: 1rem;
   }
   
   .hero-title span {
-    background: linear-gradient(135deg, #D4AF37 0%, #AA8000 100%); /* Gold gradient */
+    background: linear-gradient(135deg, #D4AF37 0%, #AA8000 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
@@ -143,8 +138,8 @@ st.markdown("""
 
   /* ---- Download buttons ---- */
   div.stDownloadButton > button {
-    background: #0A192F !important; /* Navy */
-    color: #D4AF37 !important; /* Gold text */
+    background: #0A192F !important;
+    color: #D4AF37 !important;
     border: 1px solid #D4AF37 !important;
     padding: 0.8rem 1.8rem !important;
     font-size: 1.05rem !important;
@@ -169,20 +164,13 @@ st.markdown("""
     color: #2D3748;
   }
 
-  /* ---- Text area ---- */
-  .stTextArea textarea {
+  /* ---- Text area & Multiselect ---- */
+  .stTextArea textarea, .stMultiSelect div[data-baseweb="select"] {
     background: #FFFFFF !important;
     color: #1A202C !important;
-    border: 2px solid #E2E8F0 !important;
-    border-radius: 16px !important;
+    border-radius: 12px !important;
     font-size: 1.05rem !important;
-    padding: 1rem !important;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.02) !important;
-    transition: all 0.2s ease;
-  }
-  .stTextArea textarea:focus {
-    border-color: #D4AF37 !important;
-    box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.15) !important;
   }
 
   /* ---- Expander ---- */
@@ -216,11 +204,6 @@ st.markdown("""
     margin: 4px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.02);
   }
-
-  /* ---- Warning / char count ---- */
-  .char-count { font-size: 0.9rem; color: #718096; text-align: right; font-weight: 500; }
-  .char-warn  { font-size: 0.9rem; color: #DD6B20; text-align: right; font-weight: 600; }
-  .char-error { font-size: 0.9rem; color: #E53E3E; text-align: right; font-weight: 600; }
   
   /* Additional polish */
   div[data-testid="stMarkdownContainer"] h2, div[data-testid="stMarkdownContainer"] h3, div[data-testid="stMarkdownContainer"] h4 {
@@ -237,8 +220,8 @@ st.markdown("""
 st.markdown("""
 <div class="hero-container">
   <div class="hero-overlay">
-    <div class="hero-title">Elevate Your Career to <br><span>Executive Class</span></div>
-    <p class="hero-sub">Transform your raw career history into a prestigious, world-class executive resume. Experience the power of McKinsey-standard professional branding and outshine the competition.</p>
+    <div class="hero-title">Design Your <span>Future Resume</span></div>
+    <p class="hero-sub">Are you a BSc Computer Science student? Select your dream tech roles, and we will architect the exact resume you'll have in 3 years—complete with the free online certifications you need to take to get there.</p>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -249,7 +232,7 @@ st.markdown("""
 
 def render_preview(data: dict) -> None:
     """Render a rich, read-only in-app preview of the resume."""
-    with st.expander("📄 Executive Resume Preview", expanded=True):
+    with st.expander("📄 Future Resume Preview", expanded=True):
         name = data.get("Name", "").strip()
         if name:
             st.markdown(f"<h2 style='text-align:center; font-size: 2.5rem; margin-bottom: 0;'>{name}</h2>", unsafe_allow_html=True)
@@ -264,12 +247,12 @@ def render_preview(data: dict) -> None:
         
         st.markdown('<hr class="glow-divider" style="margin: 1rem 0;">', unsafe_allow_html=True)
 
-        st.markdown("### 📋 Professional Summary")
+        st.markdown("### 📋 Executive Summary")
         st.info(data.get("Summary", ""))
         
         st.markdown('<hr class="glow-divider" style="margin: 1.5rem 0;">', unsafe_allow_html=True)
 
-        st.markdown("### 💼 Professional Experience")
+        st.markdown("### 💼 Future Experience")
         for exp in data.get("Experience", []):
             role = exp.get('Role', '')
             company = exp.get('Company', '')
@@ -283,13 +266,14 @@ def render_preview(data: dict) -> None:
         
         st.markdown('<hr class="glow-divider" style="margin: 1.5rem 0;">', unsafe_allow_html=True)
 
-        st.markdown("### 🛠️ Core Competencies & Skills")
+        st.markdown("### 🛠️ Core Competencies")
         skills_html = "".join(f'<span class="skill-chip">{s}</span>' for s in data.get("Skills", []))
         st.markdown(skills_html, unsafe_allow_html=True)
         
         st.markdown('<hr class="glow-divider" style="margin: 1.5rem 0;">', unsafe_allow_html=True)
 
-        st.markdown("### 🎓 Education & Certifications")
+        st.markdown("### 🎓 Education & Open-Source Certifications")
+        st.caption("Complete these free courses over the next 2 years to make this resume a reality!")
         for edu in data.get("Education", []):
             st.markdown(f"- **{edu}**")
 
@@ -299,8 +283,8 @@ def render_preview(data: dict) -> None:
 
 def render_editable_fields(data: dict) -> dict:
     """Display editable Streamlit widgets pre-filled with AI output."""
-    st.markdown("### ✏️ Review & Perfect Your Profile")
-    st.caption("All fields below have been masterfully curated by the AI. Edit anything before exporting your final document.")
+    st.markdown("### ✏️ Customize Your Future Profile")
+    st.caption("Fill in the blanks (like target companies or university names) before exporting.")
 
     edited = dict(data)
 
@@ -315,7 +299,7 @@ def render_editable_fields(data: dict) -> dict:
 
     with st.expander("📋 Executive Summary", expanded=False):
         edited["Summary"] = st.text_area(
-            "Summary (80-120 words recommended)",
+            "Summary",
             value=data.get("Summary", ""),
             height=150,
             key="edit_summary",
@@ -385,16 +369,8 @@ theme: str = st.sidebar.selectbox(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("**📤 Upload Existing Resume**")
-uploaded_file = st.sidebar.file_uploader(
-    "Upload .docx or .pdf to extract text automatically",
-    type=["docx", "pdf"],
-    label_visibility="collapsed",
-)
-
-st.sidebar.markdown("---")
 st.sidebar.markdown(
-    "<small style='color:#718096;'>Powered by Gemini 2.5 Flash &bull; python-docx &bull; Premium Edition</small>",
+    "<small style='color:#718096;'>Powered by Gemini 2.5 Flash &bull; Future Resume Edition</small>",
     unsafe_allow_html=True,
 )
 
@@ -402,41 +378,16 @@ st.sidebar.markdown(
 # MAIN INPUT AREA
 # ============================================================
 
-# Pre-fill from upload
-uploaded_text: str = ""
-if uploaded_file is not None:
-    file_bytes = uploaded_file.read()
-    if uploaded_file.name.lower().endswith(".docx"):
-        uploaded_text = extract_text_from_docx(file_bytes)
-    elif uploaded_file.name.lower().endswith(".pdf"):
-        uploaded_text = extract_text_from_pdf(file_bytes)
-    if uploaded_text:
-        st.sidebar.success(f"✅ Extracted {len(uploaded_text):,} characters from {uploaded_file.name}")
-        logger.info("Extracted %d chars from uploaded file: %s", len(uploaded_text), uploaded_file.name)
-    else:
-        st.sidebar.warning("⚠️ Could not extract text. Try copy-pasting instead.")
-
-raw_input: str = st.text_area(
-    "📝 Paste your raw career history",
-    value=uploaded_text,
-    height=280,
-    placeholder=PLACEHOLDER_TEXT,
-    help=f"Minimum {MIN_INPUT_CHARS} characters. Maximum {MAX_INPUT_CHARS:,} characters.",
+st.markdown("### 🎯 Career Goals")
+selected_roles = st.multiselect(
+    "What do you want to become after you graduate? (Select 1 to 3)",
+    options=CAREER_OPTIONS,
+    max_selections=3,
+    placeholder="Choose your target roles..."
 )
 
-# Character counter + validation hint
-char_count = len(raw_input)
-if char_count == 0:
-    st.markdown(f'<p class="char-count">0 / {MAX_INPUT_CHARS:,} characters</p>', unsafe_allow_html=True)
-elif char_count < MIN_INPUT_CHARS:
-    st.markdown(f'<p class="char-warn">⚠️ {char_count} / {MAX_INPUT_CHARS:,} — too short (min {MIN_INPUT_CHARS})</p>', unsafe_allow_html=True)
-elif char_count > MAX_INPUT_CHARS:
-    st.markdown(f'<p class="char-error">❌ {char_count:,} / {MAX_INPUT_CHARS:,} — too long (trim to {MAX_INPUT_CHARS:,})</p>', unsafe_allow_html=True)
-else:
-    st.markdown(f'<p class="char-count">✓ {char_count:,} / {MAX_INPUT_CHARS:,} characters</p>', unsafe_allow_html=True)
-
 st.markdown("")
-build_clicked: bool = st.button("🚀 Transform Into Executive Resume")
+build_clicked: bool = st.button("🚀 Generate My Future Resume")
 
 # ============================================================
 # PIPELINE
@@ -444,14 +395,8 @@ build_clicked: bool = st.button("🚀 Transform Into Executive Resume")
 
 if build_clicked:
     # Input validation
-    if not raw_input.strip():
-        st.warning("⚠️ Please paste or upload your career history first.")
-        st.stop()
-    if char_count < MIN_INPUT_CHARS:
-        st.warning(f"⚠️ Input is too short ({char_count} chars). Please add more detail — minimum {MIN_INPUT_CHARS} characters.")
-        st.stop()
-    if char_count > MAX_INPUT_CHARS:
-        st.error(f"❌ Input is too long ({char_count:,} chars). Please trim to under {MAX_INPUT_CHARS:,} characters.")
+    if not selected_roles:
+        st.warning("⚠️ Please select at least one future career role.")
         st.stop()
     if not api_key.strip():
         st.error("🔑 Please enter your Gemini API Key in the sidebar.")
@@ -469,32 +414,32 @@ if build_clicked:
     status = st.empty()
 
     # Web Research Grounding Pass
-    progress.progress(5, text="Web Research: Gathering top resume guidelines…")
-    with st.spinner("Researching the best resumes via Google Search grounding…"):
-        research_summary = run_research_pass(client, raw_input, status)
+    progress.progress(5, text="Web Research: Finding the best free courses…")
+    with st.spinner("Searching the web for top free/open-source certifications for your path…"):
+        research_summary = run_research_pass(client, selected_roles, status)
 
     # Pass 1
-    progress.progress(15, text="Pass 1: Extracting structured content…")
-    with st.spinner("Analysing career history & incorporating research…"):
-        extracted = run_extraction_pass(client, raw_input, research_summary, status)
+    progress.progress(15, text="Pass 1: Architecting your future resume…")
+    with st.spinner("Building your 3-year career trajectory…"):
+        extracted = run_extraction_pass(client, selected_roles, research_summary, status)
 
     if extracted is None:
         progress.progress(100, text="Pipeline failed.")
         st.stop()
 
     progress.progress(55, text="Pass 1 complete ✓")
-    status.success("✅ Pass 1 — Structured extraction complete.")
+    status.success("✅ Architecture complete.")
 
     # Pass 2
-    progress.progress(60, text="Pass 2: Enhancing executive language…")
-    with st.spinner("Elevating resume language…"):
+    progress.progress(60, text="Pass 2: Polishing vocabulary…")
+    with st.spinner("Elevating resume language to a top-tier standard…"):
         enhanced = run_enhancement_pass(client, extracted, status)
 
     progress.progress(85, text="Pass 2 complete ✓")
-    status.success("✅ Pass 2 — Executive enhancement complete.")
+    status.success("✅ Enhancement complete.")
 
     st.markdown('<hr class="glow-divider">', unsafe_allow_html=True)
-    st.success("🎉 **Masterpiece complete! Review, edit, and download your executive resume below.**")
+    st.success("🎉 **Your Future Resume is ready! Review, customize the blanks, and download.**")
 
     # ── EDITABLE FIELDS ────────────────────────────────────
     final_data = render_editable_fields(enhanced)
@@ -530,7 +475,7 @@ if build_clicked:
             st.download_button(
                 label="📄 Premium Word Document (.docx)",
                 data=docx_bytes,
-                file_name="Executive_Resume.docx",
+                file_name="Future_Resume.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )
 
@@ -538,7 +483,7 @@ if build_clicked:
         st.download_button(
             label="📝 Markdown (.md)",
             data=md_content.encode("utf-8"),
-            file_name="Executive_Resume.md",
+            file_name="Future_Resume.md",
             mime="text/markdown",
         )
 
@@ -546,6 +491,6 @@ if build_clicked:
         st.download_button(
             label="📃 ATS Plain Text (.txt)",
             data=ats_content.encode("utf-8"),
-            file_name="Executive_Resume_ATS.txt",
+            file_name="Future_Resume_ATS.txt",
             mime="text/plain",
         )
