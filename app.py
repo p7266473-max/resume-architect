@@ -336,7 +336,7 @@ class ResumeArchitect:
         st.write("Orchestrating agent run via Gemini SDK Function Calling...")
         
         # Initialize Google GenAI client using the provided key
-        client = genai.Client(api_key=self.api_key)
+        client = genai.Client(api_key=self.api_key or None)
         
         # 1. Define tools for Gemini
         tools_list = [synthesize_content, style_resume, generate_pptx]
