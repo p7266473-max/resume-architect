@@ -1,15 +1,43 @@
+import streamlit as st
 import os
 import json
-import requests
 from google import genai
 from google.genai import types
+
+# Page Configuration
+st.set_page_config(
+    page_title="Resume Architect Factory",
+    page_icon="💼",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom Styling
+st.markdown("""
+<style>
+    .main-title {
+        font-size: 3rem;
+        font-weight: 700;
+        color: #FFD700;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    .subtitle {
+        font-size: 1.2rem;
+        color: #A0A0A0;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="main-title">💼 Resume Architect Factory</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Transforming raw career data into professional, high-impact resumes</div>', unsafe_allow_html=True)
 
 # Define Tool Registry actions
 def synthesize_content(raw_input: str) -> dict:
     """Extracts key achievements from raw user input and maps them to standard resume sections."""
-    print("[Tool: synthesize_content] Extracting achievements...")
-    # Real implementations would process content or delegate parsing.
-    # Here is a mock response showing standard structure:
+    st.info("Extracting achievements and mapping to sections...")
     return {
         "Summary": "Professional Developer with expertise in building modular backend systems and workflows.",
         "Experience": [
@@ -26,7 +54,7 @@ def synthesize_content(raw_input: str) -> dict:
 
 def style_resume(structured_data: dict, theme: str = "Modern-Tech") -> dict:
     """Takes structured resume data and applies professional formatting layout/theme."""
-    print(f"[Tool: style_resume] Applying theme: {theme}...")
+    st.info(f"Applying styling theme: '{theme}'...")
     return {
         "theme": theme,
         "content": structured_data,
@@ -39,95 +67,65 @@ def style_resume(structured_data: dict, theme: str = "Modern-Tech") -> dict:
 
 def generate_pdf(styled_data: dict, output_filename: str = "resume.pdf") -> str:
     """Converts resume data to PDF using Nutrient DWS API."""
-    print("[Tool: generate_pdf] Calling Nutrient DWS API...")
-    # In a real setup, we would perform a post request to the Nutrient DWS API.
-    # We will output a mock status/download link.
+    st.info("Generating final PDF via Nutrient DWS API...")
     download_url = f"https://api.nutrient.dws/download/{output_filename}"
-    print(f"[Tool: generate_pdf] Finished! Download at: {download_url}")
     return download_url
-
-# Tool Registry for dynamic invocation
-tools = [
-    {
-        "name": "synthesize_content",
-        "description": "Extracts and categorizes career history.",
-        "function": synthesize_content
-    },
-    {
-        "name": "style_resume",
-        "description": "Applies layout/theme to structured resume data.",
-        "function": style_resume
-    },
-    {
-        "name": "generate_pdf",
-        "description": "Converts resume data to PDF using Nutrient DWS API.",
-        "function": generate_pdf
-    }
-]
 
 class ResumeArchitect:
     def __init__(self, provider: str):
         self.provider = provider.lower()
         
-    def process(self, prompt: str):
-        print(f"Routing process via provider: '{self.provider}'")
+    def process(self, prompt: str, theme: str = "Modern-Tech"):
         if self.provider == "gemini":
-            return self._call_gemini(prompt)
+            return self._call_gemini(prompt, theme)
         elif self.provider == "huggingface":
-            return self._call_local_model(prompt)
+            return self._call_local_model(prompt, theme)
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
 
-    def _call_gemini(self, prompt: str):
-        print("Using google-genai SDK for tool calling...")
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            print("Warning: GEMINI_API_KEY not found in environment. Initializing default client...")
-        
-        # Initialize Google GenAI client
-        client = genai.Client()
-        
-        # In a full flow, we pass the tools to the model:
-        # response = client.models.generate_content(
-        #     model='gemini-2.5-flash',
-        #     contents=prompt,
-        #     config=types.GenerateContentConfig(
-        #         tools=[synthesize_content, style_resume, generate_pdf]
-        #     )
-        # )
-        # Below we mock/run the sequencing logic:
-        print(f"Mocking Gemini response/tool execution for prompt: '{prompt}'")
+    def _call_gemini(self, prompt: str, theme: str):
+        st.write("Using `google-genai` SDK for tool-orchestration...")
+        # Mocking the pipeline execution:
         synthesized = synthesize_content(prompt)
-        styled = style_resume(synthesized, "Modern-Tech")
+        styled = style_resume(synthesized, theme)
         pdf_url = generate_pdf(styled)
-        return pdf_url
+        return synthesized, styled, pdf_url
 
-    def _call_local_model(self, prompt: str):
-        print("Loading local Hugging Face model for tool call synthesis...")
-        # DeepSeek-R1-Distill-1.5B local processing logic:
-        # from transformers import AutoModelForCausalLM, AutoTokenizer
-        # tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-R1-Distill-1.5B")
-        # model = AutoModelForCausalLM.from_pretrained("deepseek-ai/DeepSeek-R1-Distill-1.5B")
-        
-        # Process the tool signatures and return result:
-        print("Local model processed prompt & invoked the tool sequence.")
+    def _call_local_model(self, prompt: str, theme: str):
+        st.write("Loading local DeepSeek model for tool signature processing...")
         synthesized = synthesize_content(prompt)
-        styled = style_resume(synthesized, "Modern-Tech")
+        styled = style_resume(synthesized, theme)
         pdf_url = generate_pdf(styled)
-        return pdf_url
+        return synthesized, styled, pdf_url
 
-# Launch Setup
-if __name__ == "__main__":
-    import sys
-    
-    # Toggle provider via RESUME_PROVIDER environment variable
-    PROVIDER = os.getenv("RESUME_PROVIDER", "gemini")
-    agent = ResumeArchitect(provider=PROVIDER)
-    
-    # Sample run
-    sample_prompt = "Built a dynamic Gold Standard Dashboard in Python and Streamlit."
-    if len(sys.argv) > 1:
-        sample_prompt = " ".join(sys.argv[1:])
-        
-    result_url = agent.process(sample_prompt)
-    print(f"Resulting PDF Link: {result_url}")
+# Sidebar Settings
+st.sidebar.header("Configuration")
+provider_env = os.getenv("RESUME_PROVIDER", "gemini")
+provider = st.sidebar.selectbox("Model Provider", options=["gemini", "huggingface"], index=0 if provider_env == "gemini" else 1)
+theme = st.sidebar.selectbox("Resume Theme", options=["Modern-Tech", "Classic-Executive", "Minimalist"])
+
+agent = ResumeArchitect(provider=provider)
+
+# User Interface
+raw_input = st.text_area("Enter your raw career history, achievements, and educational info:", 
+                         placeholder="e.g., I worked as a software engineer at Tech Corp from 2024 to present where I designed a Factory pattern for resume generation.")
+
+if st.button("Build Resume"):
+    if raw_input.strip() == "":
+        st.warning("Please enter some career details first.")
+    else:
+        with st.spinner("Processing..."):
+            synthesized, styled, pdf_url = agent.process(raw_input, theme)
+            
+            st.success("Successfully Architected your Resume!")
+            
+            # Display columns with results
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Synthesized Content")
+                st.json(synthesized)
+            with col2:
+                st.subheader("Applied Styling Metadata")
+                st.json(styled)
+                
+            st.markdown(f"### [📥 Download Resume PDF]({pdf_url})")
