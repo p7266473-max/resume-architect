@@ -140,41 +140,92 @@ class ResumeArchitect:
         # 1. Define tools for Gemini
         tools_list = [synthesize_content, style_resume, generate_pdf]
         
-        # 2. Let Gemini decide the sequence using function calling
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=f"The user wants to build a resume with the details: '{prompt}'. Follow the tools sequence step-by-step: first synthesize_content, then style_resume with theme '{theme}', and finally generate_pdf.",
-            config=types.GenerateContentConfig(
-                tools=tools_list,
-                temperature=0.0
+        # We start with the user's prompt in the contents list
+        contents = [
+            types.Content(
+                role='user',
+                parts=[types.Part.from_text(text=f"The user wants to build a resume with the details: '{prompt}'. Follow the tools sequence step-by-step: first synthesize_content, then style_resume with theme '{theme}', and finally generate_pdf.")]
             )
-        )
+        ]
         
-        # Executing function calls requested by the model
         synthesized_data = {}
         styled_data = {}
         pdf_url = ""
         
-        if response.function_calls:
-            for call in response.function_calls:
-                st.write(f"Gemini requested tool execution: `{call.name}`")
-                if call.name == "synthesize_content":
-                    synthesized_data = synthesize_content(**call.args)
-                elif call.name == "style_resume":
-                    args = dict(call.args)
-                    if "structured_data" not in args or not args["structured_data"]:
-                        args["structured_data"] = synthesized_data
-                    styled_data = style_resume(**args)
-                elif call.name == "generate_pdf":
-                    args = dict(call.args)
-                    if "styled_data" not in args or not args["styled_data"]:
-                        args["styled_data"] = styled_data
-                    pdf_url = generate_pdf(**args)
-        else:
-            # Fallback if the model returns text
-            st.write("Model did not return function calls. Running fallback pipeline...")
-            synthesized_data = synthesize_content(prompt)
-            styled_data = style_resume(synthesized_data, theme)
+        # Maximum safety threshold for multi-turn steps
+        max_turns = 10
+        for turn in range(max_turns):
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    tools=tools_list,
+                    temperature=0.0
+                )
+            )
+            
+            # Append the assistant's turn to the history
+            if response.candidates and response.candidates[0].content:
+                contents.append(response.candidates[0].content)
+            else:
+                break
+            
+            # If the model requested function calls
+            if response.function_calls:
+                tool_responses = []
+                for call in response.function_calls:
+                    st.write(f"Gemini requested tool execution: `{call.name}`")
+                    
+                    # Execute the function based on the call name
+                    if call.name == "synthesize_content":
+                        synthesized_data = synthesize_content(**call.args)
+                        result = synthesized_data
+                    elif call.name == "style_resume":
+                        args = dict(call.args)
+                        # Ensure structured_data is populated if not provided
+                        if "structured_data" not in args or not args["structured_data"]:
+                            args["structured_data"] = synthesized_data
+                        # Ensure theme is populated
+                        if "theme" not in args or not args["theme"]:
+                            args["theme"] = theme
+                        styled_data = style_resume(**args)
+                        result = styled_data
+                    elif call.name == "generate_pdf":
+                        args = dict(call.args)
+                        # Ensure styled_data is populated if not provided
+                        if "styled_data" not in args or not args["styled_data"]:
+                            args["styled_data"] = styled_data
+                        pdf_url = generate_pdf(**args)
+                        result = {"download_url": pdf_url}
+                    else:
+                        result = {"error": f"Unknown function: {call.name}"}
+                    
+                    # Add to the tool responses part
+                    tool_responses.append(
+                        types.Part.from_function_response(
+                            name=call.name,
+                            response=result
+                        )
+                    )
+                
+                # Append the tool execution response to the history with role='tool'
+                contents.append(
+                    types.Content(
+                        role='tool',
+                        parts=tool_responses
+                    )
+                )
+            else:
+                # No more function calls, we are done
+                break
+                
+        # Fallback if somehow they are not filled
+        if not pdf_url:
+            st.write("Model did not request complete tool execution flow. Running fallback pipeline...")
+            if not synthesized_data:
+                synthesized_data = synthesize_content(prompt)
+            if not styled_data:
+                styled_data = style_resume(synthesized_data, theme)
             pdf_url = generate_pdf(styled_data)
             
         return synthesized_data, styled_data, pdf_url
