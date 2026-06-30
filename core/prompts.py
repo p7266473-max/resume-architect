@@ -62,7 +62,7 @@ RESUME_SCHEMA = types.Schema(
                 properties={
                     "Role": types.Schema(type=types.Type.STRING, description="Name of the Project (e.g. 'E-Commerce Web Application', 'Network Intrusion Detection System')"),
                     "Company": types.Schema(type=types.Type.STRING, description="Context (e.g. 'Capstone Project', 'Personal Open-Source Project')"),
-                    "Duration": types.Schema(type=types.Type.STRING, description="e.g. 'Spring 2026' or '2025 - 2026'"),
+                    "Duration": types.Schema(type=types.Type.STRING, description="e.g. 'Jan 2026 - May 2026' or '2025 - 2026' (DO NOT use Spring/Fall/Summer)"),
                     "Achievements": types.Schema(
                         type=types.Type.ARRAY,
                         items=types.Schema(type=types.Type.STRING),
@@ -93,10 +93,11 @@ CRITICAL RULES:
    - Role = Project Name (e.g. "Full-Stack Machine Learning Dashboard")
    - Company = Project Context (e.g. "Academic Capstone Project" or "Personal Open-Source Project")
    - Achievements = Describe the technical architecture, tools used, and what they built to learn.
-3. EDUCATION: Must include "Bachelor of Science in Computer Science - [Insert University Name]". Leave gaps for their actual university.
-4. CERTIFICATIONS: Based on the web research provided, list 3 to 4 REAL, highly-regarded FREE or Open-Source courses/certifications (e.g. freeCodeCamp, CS50, AWS Educate) that they MUST take in the next 2 years. Present them as if they have already completed them in the future.
-5. PERSONAL DETAILS: Use placeholders like "[Your Name]", "[Your Email]".
-6. TONE: Ambitious, highly competent recent graduate, focused on what they have BUILT and LEARNED, not fabricated corporate history."""
+3. LOCALIZATION (MALAYSIA): The user is in Malaysia. ABSOLUTELY DO NOT use US seasonal terms (Spring, Fall, Summer, Winter) for dates. Use specific months (e.g., "Jan 2026 - May 2026") or just years (e.g., "2025 - 2026"). 
+4. EDUCATION: Must include "Bachelor of Science in Computer Science - [Insert University Name]". Leave gaps for their actual university. For graduation dates, use "Expected 2027" (NO seasons).
+5. CERTIFICATIONS: Based on the web research provided, list 3 to 4 REAL, highly-regarded FREE or Open-Source courses/certifications (e.g. freeCodeCamp, CS50, AWS Educate) that they MUST take in the next 2 years. Present them as if they have already completed them in the future.
+6. PERSONAL DETAILS: Use placeholders like "[Your Name]", "[Your Email]".
+7. TONE: Ambitious, highly competent recent graduate, focused on what they have BUILT and LEARNED, not fabricated corporate history."""
 
 PASS1_USER_TEMPLATE = """You are provided with web research on the best free/open-source certifications and courses for the user's target roles.
 
