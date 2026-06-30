@@ -3,10 +3,7 @@ import os
 import json
 from google import genai
 from google.genai import types
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE
+from docx import Document
 
 # Page Configuration
 st.set_page_config(
@@ -150,74 +147,39 @@ def style_resume(structured_data: dict, theme: str = "Modern-Tech") -> dict:
         }
     }
 
-import subprocess
-
 def generate_docx(styled_data: dict, output_filename: str = "resume.docx") -> str:
-    """Converts resume data to a beautifully formatted Microsoft Word (DOCX) document using Pandoc."""
-    st.info("Generating final Word DOCX via Pandoc...")
+    """Generates a professional DOCX file using pure Python (python-docx). No system dependencies."""
+    st.info("Generating final Word DOCX via python-docx...")
     
+    doc = Document()
     content = styled_data.get("content", {})
-    theme = styled_data.get("theme", "Modern-Tech")
     
-    # Build markdown content
-    md_lines = []
+    # Title
+    doc.add_heading(f"{styled_data.get('theme', 'Resume')}", 0)
     
-    # Title / Header
-    md_lines.append(f"# {theme.upper()} RESUME")
-    md_lines.append("---")
-    md_lines.append("")
+    # Summary
+    doc.add_heading('Professional Summary', level=1)
+    doc.add_paragraph(content.get("Summary", ""))
     
-    # Summary Section
-    if "Summary" in content:
-        md_lines.append("## Professional Summary")
-        md_lines.append(content["Summary"])
-        md_lines.append("")
-        
-    # Experience Section
-    if "Experience" in content and content["Experience"]:
-        md_lines.append("## Professional Experience")
-        for exp in content["Experience"]:
-            role = exp.get("Role", "Specialist")
-            company = exp.get("Company", "Enterprise")
-            duration = exp.get("Duration", "Recent")
-            md_lines.append(f"### {role} — {company} ({duration})")
-            for ach in exp.get("Achievements", []):
-                md_lines.append(f"- {ach}")
-            md_lines.append("")
-            
-    # Skills Section
-    if "Skills" in content and content["Skills"]:
-        md_lines.append("## Key Skills")
-        for skill in content["Skills"]:
-            md_lines.append(f"- {skill}")
-        md_lines.append("")
-        
-    # Education Section
-    if "Education" in content and content["Education"]:
-        md_lines.append("## Education & Certifications")
-        for edu in content["Education"]:
-            md_lines.append(f"- {edu}")
-        md_lines.append("")
-        
-    md_content = "\n".join(md_lines)
+    # Experience
+    doc.add_heading('Professional Experience', level=1)
+    for exp in content.get("Experience", []):
+        doc.add_heading(f"{exp.get('Role', 'Role')} at {exp.get('Company', 'Company')}", level=2)
+        doc.add_paragraph(f"Duration: {exp.get('Duration', '')}")
+        for ach in exp.get("Achievements", []):
+            doc.add_paragraph(ach, style='List Bullet')
     
-    # Write to a temporary markdown file
-    md_path = "temp_resume.md"
-    with open(md_path, "w", encoding="utf-8") as f:
-        f.write(md_content)
-        
-    # Execute pandoc to build docx
+    # Skills
+    doc.add_heading('Key Skills', level=1)
+    doc.add_paragraph(", ".join(content.get("Skills", [])))
+    
+    # Education
+    doc.add_heading('Education & Certifications', level=1)
+    for edu in content.get("Education", []):
+        doc.add_paragraph(edu, style='List Bullet')
+    
     output_path = os.path.join(os.getcwd(), output_filename)
-    try:
-        subprocess.run(["pandoc", "-f", "markdown", "-t", "docx", "-o", output_path, md_path], check=True)
-    except Exception as e:
-        st.error(f"Pandoc execution error: {str(e)}")
-        raise e
-    finally:
-        # Clean up temp file
-        if os.path.exists(md_path):
-            os.remove(md_path)
-            
+    doc.save(output_path)
     return output_path
 
 
@@ -231,12 +193,7 @@ class ResumeArchitect:
             # Set API key in environment variable so tools can pick it up
             if self.api_key:
                 os.environ["GEMINI_API_KEY"] = self.api_key
-            if self.provider == "gemini":
-                return self._call_gemini(prompt, theme)
-            elif self.provider == "huggingface":
-                return self._call_local_model(prompt, theme)
-            else:
-                raise ValueError(f"Unknown provider: {self.provider}")
+            return self._call_gemini(prompt, theme)
         except Exception as e:
             st.error(f"⚠️ Resume Factory Maintenance: Failed to build resume. Error details: {str(e)}")
             return None, None, None
@@ -388,12 +345,7 @@ class ResumeArchitect:
             
         return synthesized_data, styled_data, docx_path
  
-    def _call_local_model(self, prompt: str, theme: str):
-        st.write("Loading local DeepSeek model for tool signature processing...")
-        synthesized_data = synthesize_content(prompt)
-        styled_data = style_resume(synthesized_data, theme)
-        docx_path = generate_docx(styled_data)
-        return synthesized_data, styled_data, docx_path
+
  
 # Sidebar Settings & Key Retriever
 st.sidebar.header("Configuration")
@@ -408,11 +360,9 @@ api_key = st.sidebar.text_input(
     help="Provide your API key to run queries."
 )
  
-provider_env = os.getenv("RESUME_PROVIDER", "gemini")
-provider = st.sidebar.selectbox("Model Provider", options=["gemini", "huggingface"], index=0 if provider_env == "gemini" else 1)
 theme = st.sidebar.selectbox("Resume Theme", options=["Modern-Tech", "Classic-Executive", "Minimalist"])
- 
-agent = ResumeArchitect(provider=provider, api_key=api_key)
+
+agent = ResumeArchitect(provider="gemini", api_key=api_key)
  
 # User Interface
 raw_input = st.text_area("Enter your raw career history, achievements, and educational info:", 
