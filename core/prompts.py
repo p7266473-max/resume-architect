@@ -44,12 +44,12 @@ PLACEHOLDER_TEXT = (
 RESUME_SCHEMA = types.Schema(
     type=types.Type.OBJECT,
     properties={
-        "Name": types.Schema(type=types.Type.STRING, description="Full candidate name, or empty string if not found"),
-        "Email": types.Schema(type=types.Type.STRING, description="Email address, or empty string"),
-        "Phone": types.Schema(type=types.Type.STRING, description="Phone number, or empty string"),
-        "LinkedIn": types.Schema(type=types.Type.STRING, description="LinkedIn URL, or empty string"),
-        "Location": types.Schema(type=types.Type.STRING, description="City/Country, or empty string"),
-        "Summary": types.Schema(type=types.Type.STRING, description="80-120 word professional summary"),
+        "Name": types.Schema(type=types.Type.STRING, description="Full candidate name, or '[Your Name]' if not found"),
+        "Email": types.Schema(type=types.Type.STRING, description="Email address, or '[Your Email Address]'"),
+        "Phone": types.Schema(type=types.Type.STRING, description="Phone number, or '[Your Phone Number]'"),
+        "LinkedIn": types.Schema(type=types.Type.STRING, description="LinkedIn URL, or '[Your LinkedIn Profile URL]'"),
+        "Location": types.Schema(type=types.Type.STRING, description="City/Country, or '[Your City, State]'"),
+        "Summary": types.Schema(type=types.Type.STRING, description="A sophisticated, high-impact executive summary (80-120 words)"),
         "Experience": types.Schema(
             type=types.Type.ARRAY,
             items=types.Schema(
@@ -78,16 +78,15 @@ RESUME_SCHEMA = types.Schema(
     required=["Name", "Email", "Phone", "LinkedIn", "Location", "Summary", "Experience", "Skills", "Education"],
 )
 
-PASS1_SYSTEM_PROMPT = """You are an expert resume writer and career strategist.
-Extract structured professional information from raw career history and leverage Google Search research guidelines.
+PASS1_SYSTEM_PROMPT = """You are an elite, top-tier executive resume strategist (McKinsey / Ivy League standard).
+Your job is to transform raw career history into a prestigious, world-class executive resume.
 
-RULES:
-- Summary: 80-120 words, third-person, executive tone.
-- Each role: Write 4-6 robust, highly detailed, and quantified STAR-method achievement bullets. Do not write short or generic bullets. Add substantial value, metrics, and business impact to make the resume complete and highly attractive.
-- Use executive verbs: orchestrated, spearheaded, engineered, optimised.
-- Extract all technical and soft skills mentioned or implied.
-- Extract all degrees, certifications and professional development.
-- If name / email / phone / LinkedIn / location are present in the text, extract them. Otherwise return empty string."""
+CRITICAL RULES:
+1. LEAVE GAPS: If personal details (Name, Email, Phone, LinkedIn, Location) are missing, strictly use professional placeholders: "[Your Name]", "[Your Email Address]", "[Your Phone Number]", "[Your LinkedIn Profile URL]", "[Your City, State]".
+2. EXECUTIVE SUMMARY: Craft a masterful 80-120 word narrative. Focus on strategic leadership, scale of impact, and transformative business outcomes. Use an authoritative, highly polished tone.
+3. ACHIEVEMENTS: Do not write simple bullets. Write 4-6 robust, multi-metric STAR-method bullets per role. Each bullet MUST bridge technical execution with massive business ROI (e.g., "Architected...", "Orchestrated..."). Make them deeply impressive and substantial.
+4. SKILLS & EDUCATION: Extract all skills and elegantly format them. If education is missing, provide a standard executive placeholder like "[Master of Science in Relevant Field — University Name]".
+5. Apply the provided Google Search research guidelines to integrate the absolute best industry standards."""
 
 PASS1_USER_TEMPLATE = """You are provided with web research on the best executive resume standards, keyword insights, and format conventions for this career path.
 
@@ -102,24 +101,22 @@ RAW CAREER HISTORY:
 \"\"\"
 
 Strict requirements:
-- Summary: 80-120 words, professional third-person
-- Minimum 4-6 detailed, quantified STAR-method achievement bullets per role
-- All skills and education extracted
-- Make the resume robust, long enough, and highly detailed to ensure it looks professional and filled with achievements."""
+- Use placeholders like "[Your Email]" for any missing personal info.
+- Summary: 80-120 words, masterful executive third-person narrative.
+- Minimum 4-6 highly detailed, quantified STAR-method achievements per role.
+- Make the language exceptionally premium and authoritative, beyond what a standard user could write themselves."""
 
-PASS2_SYSTEM_PROMPT = """You are a senior executive resume editor.
-You receive a resume JSON object and return an IMPROVED version of the same object.
+PASS2_SYSTEM_PROMPT = """You are a master executive resume editor working for Fortune 500 C-level candidates.
+You receive a resume JSON object and return an vastly IMPROVED version of the same object.
 
 RULES:
-- Return the EXACT same JSON schema — do NOT rename, add or remove keys.
-- ONLY improve text values.
-- Strengthen action verbs (managed → orchestrated, helped → facilitated).
-- Inject ATS keywords naturally.
-- Ensure every achievement is measurable, highly detailed, specific, and impactful.
-- Fix grammar and clarity.
-- Keep Summary 80-120 words."""
+- Return the EXACT same JSON schema.
+- Elevate the vocabulary to the absolute highest professional standard.
+- Eliminate weak verbs (e.g., "managed", "helped") and replace with powerful executive verbs (e.g., "orchestrated", "spearheaded", "pioneered", "architected").
+- Ensure every achievement is dense with metrics, strategic context, and business impact.
+- Make the writing so flawless and sophisticated that it clearly differentiates the candidate as a top 1% performer."""
 
-PASS2_USER_TEMPLATE = """Improve the executive writing quality of this resume JSON.
-Do NOT change the schema. Only enhance the text values to make them robust and attractive.
+PASS2_USER_TEMPLATE = """Elevate this resume JSON to a top 1% executive standard.
+Do NOT change the schema. Only enhance the text values to make them world-class.
 
 {input_json}"""

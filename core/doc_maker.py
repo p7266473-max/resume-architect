@@ -3,7 +3,7 @@ import logging
 from typing import Any
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
@@ -13,7 +13,6 @@ from core.prompts import THEME_COLORS
 logger = logging.getLogger("resume_architect")
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
-    """Extract plain text from a .docx file bytes."""
     try:
         doc = Document(io.BytesIO(file_bytes))
         return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
@@ -22,29 +21,23 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
         return ""
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract plain text from a PDF using PyMuPDF (fitz) if available,
-    falling back to pdfminer, then a raw byte-decode attempt."""
     try:
         import fitz  # type: ignore
         with fitz.open(stream=file_bytes, filetype="pdf") as pdf:
             return "\n".join(page.get_text() for page in pdf)
     except ImportError:
         pass
-
     try:
         from pdfminer.high_level import extract_text as pdfminer_extract  # type: ignore
         return pdfminer_extract(io.BytesIO(file_bytes))
     except ImportError:
         pass
-
-    logger.warning("No PDF parsing library found. Install PyMuPDF or pdfminer.six.")
     return ""
 
 def _rgb(triple: tuple[int, int, int]) -> RGBColor:
     return RGBColor(*triple)
 
 def _add_hyperlink(paragraph: Any, url: str, text: str, color: RGBColor) -> None:
-    """Insert a clickable hyperlink run into a paragraph."""
     part = paragraph.part
     r_id = part.relate_to(url, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
     hyperlink = OxmlElement("w:hyperlink")
@@ -55,7 +48,7 @@ def _add_hyperlink(paragraph: Any, url: str, text: str, color: RGBColor) -> None
     u.set(qn("w:val"), "single")
     rPr.append(u)
     clr = OxmlElement("w:color")
-    clr.set(qn("w:val"), "{:02X}{:02X}{:02X}".format(*color))
+    clr.set(qn("w:val"), "{:02X}{:02X}{:02X}".format(color[0], color[1], color[2]))
     rPr.append(clr)
     new_run.append(rPr)
     t = OxmlElement("w:t")
@@ -67,7 +60,7 @@ def _add_hyperlink(paragraph: Any, url: str, text: str, color: RGBColor) -> None
 def _separator(doc: Document, color: RGBColor, thickness_pt: float = 1.0) -> None:
     """Adds a beautiful native border line to divide resume sections cleanly."""
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(8)
+    p.paragraph_format.space_before = Pt(4)
     p.paragraph_format.space_after = Pt(8)
     
     pPr = p._p.get_or_add_pPr()
@@ -81,182 +74,188 @@ def _separator(doc: Document, color: RGBColor, thickness_pt: float = 1.0) -> Non
     pPr.append(pBdr)
 
 def _section_heading(doc: Document, text: str, color: RGBColor) -> None:
-    h = doc.add_heading(level=1)
-    h.clear()
+    h = doc.add_paragraph()
+    h.paragraph_format.space_before = Pt(16)
+    h.paragraph_format.space_after = Pt(2)
+    h.paragraph_format.keep_with_next = True
+    
     r = h.add_run(text.upper())
     r.bold = True
-    r.font.size = Pt(13)
+    r.font.size = Pt(12)
+    r.font.name = 'Arial'
     r.font.color.rgb = color
-    h.paragraph_format.space_before = Pt(14)
-    h.paragraph_format.space_after = Pt(4)
+    
+    # Add border
+    pPr = h._p.get_or_add_pPr()
+    pBdr = OxmlElement('w:pBdr')
+    bottom = OxmlElement('w:bottom')
+    bottom.set(qn('w:val'), 'single')
+    bottom.set(qn('w:sz'), '8')  # 1pt border
+    bottom.set(qn('w:space'), '1')
+    bottom.set(qn('w:color'), "{:02X}{:02X}{:02X}".format(*color))
+    pBdr.append(bottom)
+    pPr.append(pBdr)
 
 def generate_docx_bytes(data: dict, theme: str) -> bytes:
-    """Build a themed, professional DOCX resume and return as bytes (BytesIO)."""
+    """Build an ultra-premium, pixel-perfect DOCX resume."""
     colors = THEME_COLORS.get(theme, THEME_COLORS["Modern-Tech"])
     heading_color = _rgb(colors["heading"])
     sub_color = _rgb(colors["subheading"])
     accent_color = _rgb(colors["accent"])
 
     doc = Document()
-
-    # Apply global font (Calibri / Georgia style)
+    
+    # Global Font Setup
     style = doc.styles['Normal']
     font = style.font
-    font.name = 'Calibri'
-    font.size = Pt(10.5)
+    font.name = 'Georgia' # Premium serif for body, clean sans-serif for headers
+    font.size = Pt(10)
 
-    # Page margins
+    # Page Margins: 0.8 inch left/right means usable width is 8.5 - 1.6 = 6.9 inches
     for sec in doc.sections:
         sec.top_margin = Inches(0.7)
         sec.bottom_margin = Inches(0.7)
         sec.left_margin = Inches(0.8)
         sec.right_margin = Inches(0.8)
 
-    # ── NAME / CONTACT HEADER ──────────────────────────────
+    # ── HEADER: NAME & CONTACT ──────────────────────────────
     name = data.get("Name", "").strip() or "Your Name"
-    email = data.get("Email", "").strip()
-    phone = data.get("Phone", "").strip()
-    linkedin = data.get("LinkedIn", "").strip()
-    location = data.get("Location", "").strip()
-
     name_para = doc.add_paragraph()
     name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    name_para.paragraph_format.space_after = Pt(4)
-    nr = name_para.add_run(name)
+    name_para.paragraph_format.space_after = Pt(2)
+    nr = name_para.add_run(name.upper())
     nr.bold = True
-    nr.font.size = Pt(26)
+    nr.font.size = Pt(22)
+    nr.font.name = 'Arial'
     nr.font.color.rgb = heading_color
 
-    # Contact line
-    contact_parts: list[str] = []
-    if location:
-        contact_parts.append(location)
-    if phone:
-        contact_parts.append(phone)
-
-    contact_para = doc.add_paragraph()
-    contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    contact_para.paragraph_format.space_after = Pt(2)
+    contact_parts = []
+    if data.get("Location"): contact_parts.append(data.get("Location").strip())
+    if data.get("Phone"): contact_parts.append(data.get("Phone").strip())
+    if data.get("Email"): contact_parts.append(data.get("Email").strip())
+    if data.get("LinkedIn"): contact_parts.append(data.get("LinkedIn").strip())
 
     if contact_parts:
-        cr = contact_para.add_run("  |  ".join(contact_parts))
-        cr.font.size = Pt(10)
-        cr.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
-
-    # Hyperlinks for email / LinkedIn
-    link_para = doc.add_paragraph()
-    link_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    link_para.paragraph_format.space_after = Pt(6)
-
-    if email:
-        _add_hyperlink(link_para, f"mailto:{email}", email, accent_color)
-    if email and linkedin:
-        sp = link_para.add_run("   |   ")
-        sp.font.size = Pt(10)
-        sp.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
-    if linkedin:
-        url = linkedin if linkedin.startswith("http") else f"https://{linkedin}"
-        _add_hyperlink(link_para, url, linkedin, accent_color)
-
-    _separator(doc, accent_color, thickness_pt=1.5)
+        contact_para = doc.add_paragraph()
+        contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contact_para.paragraph_format.space_after = Pt(12)
+        
+        for i, part in enumerate(contact_parts):
+            if "@" in part or "http" in part or "linkedin" in part.lower():
+                _add_hyperlink(contact_para, part if "http" in part else f"mailto:{part}", part, accent_color)
+            else:
+                cr = contact_para.add_run(part)
+                cr.font.size = Pt(9.5)
+                cr.font.name = 'Arial'
+                cr.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+            
+            if i < len(contact_parts) - 1:
+                sep = contact_para.add_run("   |   ")
+                sep.font.color.rgb = RGBColor(0xAA, 0xAA, 0xAA)
 
     # ── PROFESSIONAL SUMMARY ───────────────────────────────
-    _section_heading(doc, "Professional Summary", heading_color)
-    sp = doc.add_paragraph(data.get("Summary", ""))
-    sp.paragraph_format.space_after = Pt(10)
-    sp.paragraph_format.line_spacing = 1.15
-    for r in sp.runs:
-        r.font.size = Pt(10.5)
+    if data.get("Summary"):
+        _section_heading(doc, "Professional Summary", heading_color)
+        sp = doc.add_paragraph(data.get("Summary", ""))
+        sp.paragraph_format.space_before = Pt(6)
+        sp.paragraph_format.space_after = Pt(10)
+        sp.paragraph_format.line_spacing = 1.2
+        sp.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        for r in sp.runs:
+            r.font.size = Pt(10)
+            r.font.name = 'Georgia'
 
     # ── PROFESSIONAL EXPERIENCE ────────────────────────────
-    _section_heading(doc, "Professional Experience", heading_color)
+    _section_heading(doc, "Experience", heading_color)
 
     for exp in data.get("Experience", []):
         role_para = doc.add_paragraph()
         role_para.paragraph_format.space_before = Pt(8)
-        role_para.paragraph_format.space_after = Pt(1)
+        role_para.paragraph_format.space_after = Pt(2)
+        role_para.paragraph_format.keep_with_next = True
         
-        # Job Title left aligned, Company inline
-        rr = role_para.add_run(exp.get("Role", "Professional"))
+        # Set up a right-aligned tab stop at 6.9 inches for the date
+        tab_stops = role_para.paragraph_format.tab_stops
+        tab_stops.add_tab_stop(Inches(6.9), WD_TAB_ALIGNMENT.RIGHT)
+
+        role = exp.get("Role", "Professional")
+        company = exp.get("Company", "")
+        duration = exp.get("Duration", "")
+
+        # Role & Company (Left)
+        rr = role_para.add_run(role)
         rr.bold = True
-        rr.font.size = Pt(11.5)
-        rr.font.color.rgb = sub_color
+        rr.font.size = Pt(11)
+        rr.font.name = 'Arial'
+        rr.font.color.rgb = RGBColor(0x22, 0x22, 0x22)
+        
+        if company:
+            cr = role_para.add_run(f"  |  {company}")
+            cr.bold = True
+            cr.font.size = Pt(11)
+            cr.font.name = 'Arial'
+            cr.font.color.rgb = sub_color
 
-        company_run = role_para.add_run(f"  ·  {exp.get('Company', '')}")
-        company_run.font.size = Pt(11)
-        company_run.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
+        # Date (Right aligned via tab)
+        if duration:
+            dr = role_para.add_run(f"\t{duration}")
+            dr.bold = True
+            dr.font.size = Pt(10)
+            dr.font.name = 'Arial'
+            dr.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
 
-        dur = exp.get("Duration", "")
-        if dur:
-            dp = doc.add_paragraph()
-            dp.paragraph_format.space_before = Pt(0)
-            dp.paragraph_format.space_after = Pt(4)
-            dr = dp.add_run(dur)
-            dr.italic = True
-            dr.font.size = Pt(9.5)
-            dr.font.color.rgb = RGBColor(0x77, 0x77, 0x77)
-
+        # Achievements
         for ach in exp.get("Achievements", []):
-            bp = doc.add_paragraph(style="List Bullet")
-            bp.clear()
-            bp.paragraph_format.space_before = Pt(2)
-            bp.paragraph_format.space_after = Pt(2)
+            bp = doc.add_paragraph()
+            bp.paragraph_format.space_before = Pt(3)
+            bp.paragraph_format.space_after = Pt(3)
             bp.paragraph_format.line_spacing = 1.15
             bp.paragraph_format.left_indent = Inches(0.25)
-            ar = bp.add_run(str(ach))
+            bp.paragraph_format.first_line_indent = Inches(-0.15)
+            
+            # Custom bullet point symbol
+            bullet = bp.add_run("•  ")
+            bullet.font.name = 'Arial'
+            bullet.font.size = Pt(10)
+            
+            ar = bp.add_run(str(ach).strip())
             ar.font.size = Pt(10)
+            ar.font.name = 'Georgia'
 
     # ── KEY SKILLS ─────────────────────────────────────────
-    _section_heading(doc, "Key Skills", heading_color)
     skills = data.get("Skills", [])
-
-    if theme == "ATS-Friendly":
-        sp2 = doc.add_paragraph(", ".join(skills))
+    if skills:
+        _section_heading(doc, "Core Competencies & Skills", heading_color)
+        
+        # Instead of a table, we use a beautifully formatted comma-separated block 
+        # or grouped text to keep it 100% ATS proof and elegant.
+        sp2 = doc.add_paragraph()
+        sp2.paragraph_format.space_before = Pt(6)
         sp2.paragraph_format.space_after = Pt(10)
-        for r in sp2.runs:
-            r.font.size = Pt(10.5)
-    else:
-        if skills:
-            half = (len(skills) + 1) // 2
-            left_col = skills[:half]
-            right_col = skills[half:]
-            table = doc.add_table(rows=max(len(left_col), len(right_col)), cols=2)
-            table.style = "Table Grid"
-
-            # Remove borders for visual cleanliness
-            for row in table.rows:
-                for cell in row.cells:
-                    for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
-                        tc_pr = cell._tc.get_or_add_tcPr()
-                        tc_borders = tc_pr.find(qn("w:tcBorders")) or OxmlElement("w:tcBorders")
-                        tc_pr.append(tc_borders)
-                        border = OxmlElement(f"w:{border_name}")
-                        border.set(qn("w:val"), "none")
-                        border.set(qn("w:sz"), "0")
-                        tc_borders.append(border)
-
-            for i, skill in enumerate(left_col):
-                cell = table.cell(i, 0)
-                cell.text = f"•  {skill}"
-                cell.paragraphs[0].paragraph_format.space_after = Pt(2)
-                for run in cell.paragraphs[0].runs:
-                    run.font.size = Pt(10)
-            for i, skill in enumerate(right_col):
-                cell = table.cell(i, 1)
-                cell.text = f"•  {skill}"
-                cell.paragraphs[0].paragraph_format.space_after = Pt(2)
-                for run in cell.paragraphs[0].runs:
-                    run.font.size = Pt(10)
+        sp2.paragraph_format.line_spacing = 1.3
+        sp2.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        
+        skills_run = sp2.add_run(" • ".join(skills))
+        skills_run.font.size = Pt(10)
+        skills_run.font.name = 'Georgia'
+        skills_run.font.bold = True
+        skills_run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
 
     # ── EDUCATION & CERTIFICATIONS ─────────────────────────
-    _section_heading(doc, "Education & Certifications", heading_color)
-    for edu in data.get("Education", []):
-        ep = doc.add_paragraph(style="List Bullet")
-        ep.clear()
-        ep.paragraph_format.space_before = Pt(2)
-        ep.paragraph_format.space_after = Pt(2)
-        er = ep.add_run(str(edu))
-        er.font.size = Pt(10.5)
+    edu_list = data.get("Education", [])
+    if edu_list:
+        _section_heading(doc, "Education & Certifications", heading_color)
+        for edu in edu_list:
+            ep = doc.add_paragraph()
+            ep.paragraph_format.space_before = Pt(4)
+            ep.paragraph_format.space_after = Pt(4)
+            ep.paragraph_format.left_indent = Inches(0.15)
+            
+            # Format: split by " - " or "|" if generated that way, or just bold the whole line
+            er = ep.add_run(str(edu))
+            er.bold = True
+            er.font.size = Pt(10.5)
+            er.font.name = 'Georgia'
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -287,11 +286,11 @@ def generate_markdown(data: dict) -> str:
 
     lines += ["", "---", "", "## Key Skills", ""]
     if data.get("Skills"):
-        lines.append(", ".join(data["Skills"]))
+        lines.append(" • ".join(data["Skills"]))
 
     lines += ["", "---", "", "## Education & Certifications", ""]
     for edu in data.get("Education", []):
-        lines.append(f"- {edu}")
+        lines.append(f"- **{edu}**")
 
     return "\n".join(lines)
 
