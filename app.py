@@ -12,35 +12,75 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling
+# Custom Premium Styling
 st.markdown("""
 <style>
-    .main-title {
-        font-size: 3rem;
-        font-weight: 700;
-        color: #FFD700;
+    /* Main Background and Card Design */
+    .reportview-container {
+        background: linear-gradient(135deg, #1e1e2f 0%, #11111d 100%);
+    }
+    
+    /* Center Title Custom CSS */
+    .title-container {
         text-align: center;
+        padding: 2rem 0 1rem 0;
+    }
+    .title-main {
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #a855f7 0%, #3b82f6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin-bottom: 0.5rem;
     }
-    .subtitle {
-        font-size: 1.2rem;
-        color: #A0A0A0;
-        text-align: center;
-        margin-bottom: 2rem;
+    .title-sub {
+        font-size: 1.1rem;
+        color: #94a3b8;
+        font-weight: 400;
+    }
+    
+    /* Customize Buttons and Inputs */
+    div.stButton > button {
+        background: linear-gradient(90deg, #a855f7 0%, #3b82f6 100%) !important;
+        color: white !important;
+        border: none !important;
+        padding: 0.75rem 2rem !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        border-radius: 12px !important;
+        transition: all 0.3s ease !important;
+        width: 100% !important;
+        box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4) !important;
+    }
+    div.stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(168, 85, 247, 0.6) !important;
+    }
+    div.stButton > button:active {
+        transform: translateY(1px) !important;
+    }
+    
+    /* Code block container styling */
+    .stCodeBlock {
+        border-radius: 12px !important;
+        border: 1px solid #334155 !important;
+        background-color: #0f172a !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-title">💼 Resume Architect Factory</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Transforming raw career data into professional, high-impact resumes</div>', unsafe_allow_html=True)
+# Header Section
+st.markdown("""
+<div class="title-container">
+    <div class="title-main">Resume Architect Factory</div>
+    <div class="title-sub">Transform your raw career data into professional, high-impact resumes instantly</div>
+</div>
+""", unsafe_allow_html=True)
 
 # Define Tool Registry actions
 def synthesize_content(raw_input: str) -> dict:
     """Extracts key achievements from raw user input and maps them to standard resume sections."""
     st.info("Extracting achievements and mapping to sections...")
-    # Real programmatic extraction using simple layout structured JSON
-    # Typically, the agent acts as orchestrator, but we implement the logic here
-    # to process the actual text.
     return {
         "Summary": f"Professional with experience highlighting: {raw_input[:100]}...",
         "Experience": [
@@ -75,8 +115,9 @@ def generate_pdf(styled_data: dict, output_filename: str = "resume.pdf") -> str:
     return download_url
 
 class ResumeArchitect:
-    def __init__(self, provider: str):
+    def __init__(self, provider: str, api_key: str = None):
         self.provider = provider.lower()
+        self.api_key = api_key
         
     def process(self, prompt: str, theme: str = "Modern-Tech"):
         try:
@@ -93,18 +134,15 @@ class ResumeArchitect:
     def _call_gemini(self, prompt: str, theme: str):
         st.write("Orchestrating agent run via Gemini SDK Function Calling...")
         
-        # Pull api_key from environment or Streamlit secrets
-        api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", None)
-        
-        # Initialize Google GenAI client
-        client = genai.Client(api_key=api_key)
+        # Initialize Google GenAI client using the provided key
+        client = genai.Client(api_key=self.api_key)
         
         # 1. Define tools for Gemini
         tools_list = [synthesize_content, style_resume, generate_pdf]
         
         # 2. Let Gemini decide the sequence using function calling
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-2.5-flash',
             contents=f"The user wants to build a resume with the details: '{prompt}'. Follow the tools sequence step-by-step: first synthesize_content, then style_resume with theme '{theme}', and finally generate_pdf.",
             config=types.GenerateContentConfig(
                 tools=tools_list,
@@ -123,7 +161,6 @@ class ResumeArchitect:
                 if call.name == "synthesize_content":
                     synthesized_data = synthesize_content(**call.args)
                 elif call.name == "style_resume":
-                    # Pass the previously synthesized data if not provided directly
                     args = dict(call.args)
                     if "structured_data" not in args or not args["structured_data"]:
                         args["structured_data"] = synthesized_data
@@ -149,21 +186,34 @@ class ResumeArchitect:
         pdf_url = generate_pdf(styled_data)
         return synthesized_data, styled_data, pdf_url
 
-# Sidebar Settings
+# Sidebar Settings & Key Retriever
 st.sidebar.header("Configuration")
+
+# Retrieve API key: check secrets first, then environment variables
+default_api_key = os.environ.get("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY", "")
+
+api_key = st.sidebar.text_input(
+    "Gemini API Key",
+    value=default_api_key,
+    type="password",
+    help="Provide your API key to run queries."
+)
+
 provider_env = os.getenv("RESUME_PROVIDER", "gemini")
 provider = st.sidebar.selectbox("Model Provider", options=["gemini", "huggingface"], index=0 if provider_env == "gemini" else 1)
 theme = st.sidebar.selectbox("Resume Theme", options=["Modern-Tech", "Classic-Executive", "Minimalist"])
 
-agent = ResumeArchitect(provider=provider)
+agent = ResumeArchitect(provider=provider, api_key=api_key)
 
 # User Interface
 raw_input = st.text_area("Enter your raw career history, achievements, and educational info:", 
                          placeholder="e.g., I worked as a software engineer at Tech Corp from 2024 to present where I designed a Factory pattern for resume generation.")
 
 if st.button("Build Resume"):
-    if raw_input.strip() == "":
+    if not raw_input.strip():
         st.warning("Please enter some career details first.")
+    elif provider == "gemini" and not api_key:
+        st.error("Kindly enter API Key in the sidebar configuration.")
     else:
         with st.spinner("Processing..."):
             synthesized, styled, pdf_url = agent.process(raw_input, theme)
