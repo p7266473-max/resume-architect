@@ -252,7 +252,7 @@ def render_preview(data: dict) -> None:
         
         st.markdown('<hr class="glow-divider" style="margin: 1.5rem 0;">', unsafe_allow_html=True)
 
-        st.markdown("### 💼 Future Experience")
+        st.markdown("### 💻 Academic & Personal Projects")
         for exp in data.get("Experience", []):
             role = exp.get('Role', '')
             company = exp.get('Company', '')
@@ -305,13 +305,13 @@ def render_editable_fields(data: dict) -> dict:
             key="edit_summary",
         )
 
-    with st.expander("💼 Experience", expanded=False):
+    with st.expander("💻 Academic & Personal Projects", expanded=False):
         edited_exp: list[dict] = []
         for i, exp in enumerate(data.get("Experience", [])):
-            st.markdown(f"**Role {i+1}**")
+            st.markdown(f"**Project {i+1}**")
             ec1, ec2, ec3 = st.columns([3, 3, 2])
-            role = ec1.text_input("Job Title", value=exp.get("Role", ""), key=f"role_{i}")
-            company = ec2.text_input("Company", value=exp.get("Company", ""), key=f"company_{i}")
+            role = ec1.text_input("Project Name", value=exp.get("Role", ""), key=f"role_{i}")
+            company = ec2.text_input("Context (e.g. Capstone)", value=exp.get("Company", ""), key=f"company_{i}")
             duration = ec3.text_input("Duration", value=exp.get("Duration", ""), key=f"duration_{i}")
             achievements_text = st.text_area(
                 "Achievements (one per line)",

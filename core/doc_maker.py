@@ -165,8 +165,8 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
             r.font.size = Pt(10)
             r.font.name = 'Georgia'
 
-    # ── PROFESSIONAL EXPERIENCE ────────────────────────────
-    _section_heading(doc, "Experience", heading_color)
+    # ── ACADEMIC & PERSONAL PROJECTS ────────────────────────────
+    _section_heading(doc, "Academic & Personal Projects", heading_color)
 
     for exp in data.get("Experience", []):
         role_para = doc.add_paragraph()
@@ -277,7 +277,7 @@ def generate_markdown(data: dict) -> str:
     lines += ["", "---", "", "## Professional Summary", "", data.get("Summary", ""), "", "---", ""]
 
     if data.get("Experience"):
-        lines.append("## Professional Experience")
+        lines.append("## Academic & Personal Projects")
         for exp in data["Experience"]:
             lines.append(f"\n### {exp.get('Role')}  ·  {exp.get('Company')}")
             lines.append(f"*{exp.get('Duration', '')}*")
@@ -306,7 +306,7 @@ def generate_ats_text(data: dict) -> str:
             lines.append(f"{f}: {v}")
 
     lines += ["", "PROFESSIONAL SUMMARY", "-" * 40, data.get("Summary", ""), ""]
-    lines += ["PROFESSIONAL EXPERIENCE", "-" * 40]
+    lines += ["ACADEMIC & PERSONAL PROJECTS", "-" * 40]
     for exp in data.get("Experience", []):
         lines.append(f"{exp.get('Role')} | {exp.get('Company')} | {exp.get('Duration', '')}")
         for ach in exp.get("Achievements", []):
