@@ -131,15 +131,48 @@ def call_gemini_with_retry(
     st.error(f"❌ {step_label} failed after {MAX_RETRIES} attempts.")
     return None
 
+def run_research_pass(
+    client: genai.Client,
+    raw_input: str,
+    status_ph: Any,
+) -> str:
+    """Pre-pass: Access Google Search via Gemini API to find standard, high-impact resume patterns,
+    keywords, and formats relevant to the candidate's career history."""
+    step_label = "Web Research — Gathering industry best practices"
+    status_ph.info(f"🔄 {step_label}…")
+    logger.info(step_label)
+    
+    try:
+        config = types.GenerateContentConfig(
+            system_instruction="You are an expert recruiter and resume researcher. Use Google Search to find top executive resume templates, action verbs, industry-specific ATS keywords, and structure standards relevant to the candidate's raw career history. Summarize the best-in-class resume rules and metrics patterns to guide the resume generation process.",
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            temperature=0.3,
+        )
+        contents = f"Here is the candidate's raw career history:\n\n{raw_input}\n\nSearch for the best executive resumes, structures, achievements, and keywords corresponding to this career path/role, and summarize how to write an elite resume for them."
+        
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,
+            config=config,
+        )
+        if response and response.text:
+            logger.info("Web research complete.")
+            return response.text
+    except Exception as exc:
+        logger.warning("Web research pass failed: %s. Proceeding without search grounding.", exc)
+        
+    return "Standard executive resume guidelines: Quantifiable STAR achievements, strong action verbs, clean formatting, and clear sections."
+
 def run_extraction_pass(
     client: genai.Client,
     raw_input: str,
+    research_summary: str,
     status_ph: Any,
 ) -> Optional[dict]:
     """Pass 1: Extract structured resume data using Gemini structured output."""
     raw = call_gemini_with_retry(
         client, PASS1_SYSTEM_PROMPT,
-        PASS1_USER_TEMPLATE.format(raw_input=raw_input),
+        PASS1_USER_TEMPLATE.format(raw_input=raw_input, research_summary=research_summary),
         temperature=0.3,
         status_ph=status_ph,
         step_label="Pass 1 — Extracting structured content",

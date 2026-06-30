@@ -79,17 +79,22 @@ RESUME_SCHEMA = types.Schema(
 )
 
 PASS1_SYSTEM_PROMPT = """You are an expert resume writer and career strategist.
-Extract structured professional information from raw career history.
+Extract structured professional information from raw career history and leverage Google Search research guidelines.
 
 RULES:
 - Summary: 80-120 words, third-person, executive tone.
-- Each role: MINIMUM 3 STAR-method bullets with quantified results.
+- Each role: Write 4-6 robust, highly detailed, and quantified STAR-method achievement bullets. Do not write short or generic bullets. Add substantial value, metrics, and business impact to make the resume complete and highly attractive.
 - Use executive verbs: orchestrated, spearheaded, engineered, optimised.
 - Extract all technical and soft skills mentioned or implied.
 - Extract all degrees, certifications and professional development.
 - If name / email / phone / LinkedIn / location are present in the text, extract them. Otherwise return empty string."""
 
-PASS1_USER_TEMPLATE = """Extract structured resume content from the career history below.
+PASS1_USER_TEMPLATE = """You are provided with web research on the best executive resume standards, keyword insights, and format conventions for this career path.
+
+WEB RESEARCH INSIGHTS:
+\"\"\"
+{research_summary}
+\"\"\"
 
 RAW CAREER HISTORY:
 \"\"\"
@@ -98,8 +103,9 @@ RAW CAREER HISTORY:
 
 Strict requirements:
 - Summary: 80-120 words, professional third-person
-- Minimum 3 quantified STAR-method achievement bullets per role
-- All skills and education extracted"""
+- Minimum 4-6 detailed, quantified STAR-method achievement bullets per role
+- All skills and education extracted
+- Make the resume robust, long enough, and highly detailed to ensure it looks professional and filled with achievements."""
 
 PASS2_SYSTEM_PROMPT = """You are a senior executive resume editor.
 You receive a resume JSON object and return an IMPROVED version of the same object.
@@ -109,11 +115,11 @@ RULES:
 - ONLY improve text values.
 - Strengthen action verbs (managed → orchestrated, helped → facilitated).
 - Inject ATS keywords naturally.
-- Ensure every achievement is measurable and specific.
+- Ensure every achievement is measurable, highly detailed, specific, and impactful.
 - Fix grammar and clarity.
 - Keep Summary 80-120 words."""
 
 PASS2_USER_TEMPLATE = """Improve the executive writing quality of this resume JSON.
-Do NOT change the schema. Only enhance the text values.
+Do NOT change the schema. Only enhance the text values to make them robust and attractive.
 
 {input_json}"""

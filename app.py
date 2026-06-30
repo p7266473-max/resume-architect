@@ -21,6 +21,7 @@ from core.prompts import (
 )
 from core.engine import (
     get_gemini_client,
+    run_research_pass,
     run_extraction_pass,
     run_enhancement_pass,
 )
@@ -423,24 +424,29 @@ if build_clicked:
     progress = st.progress(0, text="Initialising pipeline…")
     status = st.empty()
 
+    # Web Research Grounding Pass
+    progress.progress(5, text="Web Research: Gathering top resume guidelines…")
+    with st.spinner("Researching the best resumes via Google Search grounding…"):
+        research_summary = run_research_pass(client, raw_input, status)
+
     # Pass 1
-    progress.progress(10, text="Pass 1: Extracting structured content…")
-    with st.spinner("Analysing career history…"):
-        extracted = run_extraction_pass(client, raw_input, status)
+    progress.progress(15, text="Pass 1: Extracting structured content…")
+    with st.spinner("Analysing career history & incorporating research…"):
+        extracted = run_extraction_pass(client, raw_input, research_summary, status)
 
     if extracted is None:
         progress.progress(100, text="Pipeline failed.")
         st.stop()
 
-    progress.progress(45, text="Pass 1 complete ✓")
+    progress.progress(55, text="Pass 1 complete ✓")
     status.success("✅ Pass 1 — Structured extraction complete.")
 
     # Pass 2
-    progress.progress(50, text="Pass 2: Enhancing executive language…")
+    progress.progress(60, text="Pass 2: Enhancing executive language…")
     with st.spinner("Elevating resume language…"):
         enhanced = run_enhancement_pass(client, extracted, status)
 
-    progress.progress(78, text="Pass 2 complete ✓")
+    progress.progress(85, text="Pass 2 complete ✓")
     status.success("✅ Pass 2 — Executive enhancement complete.")
 
     st.markdown('<hr class="glow-divider">', unsafe_allow_html=True)
@@ -454,7 +460,7 @@ if build_clicked:
     # ── PREVIEW ────────────────────────────────────────────
     render_preview(final_data)
 
-    progress.progress(88, text="Generating export files…")
+    progress.progress(90, text="Generating export files…")
 
     # ── GENERATE ALL EXPORTS ───────────────────────────────
     with st.spinner("Building export files…"):

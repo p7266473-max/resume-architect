@@ -64,22 +64,30 @@ def _add_hyperlink(paragraph: Any, url: str, text: str, color: RGBColor) -> None
     hyperlink.append(new_run)
     paragraph._p.append(hyperlink)
 
-def _separator(doc: Document, light: bool = False) -> None:
+def _separator(doc: Document, color: RGBColor, thickness_pt: float = 1.0) -> None:
+    """Adds a beautiful native border line to divide resume sections cleanly."""
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(2)
-    p.paragraph_format.space_after = Pt(6)
-    r = p.add_run("─" * 65)
-    r.font.size = Pt(6)
-    r.font.color.rgb = RGBColor(0xCC, 0xCC, 0xCC) if light else RGBColor(0xAA, 0xAA, 0xAA)
+    p.paragraph_format.space_before = Pt(8)
+    p.paragraph_format.space_after = Pt(8)
+    
+    pPr = p._p.get_or_add_pPr()
+    pBdr = OxmlElement('w:pBdr')
+    bottom = OxmlElement('w:bottom')
+    bottom.set(qn('w:val'), 'single')
+    bottom.set(qn('w:sz'), str(int(thickness_pt * 8)))  # sz is in 1/8 pt
+    bottom.set(qn('w:space'), '1')
+    bottom.set(qn('w:color'), "{:02X}{:02X}{:02X}".format(color.rgb[0], color.rgb[1], color.rgb[2]))
+    pBdr.append(bottom)
+    pPr.append(pBdr)
 
 def _section_heading(doc: Document, text: str, color: RGBColor) -> None:
     h = doc.add_heading(level=1)
     h.clear()
     r = h.add_run(text.upper())
     r.bold = True
-    r.font.size = Pt(12)
+    r.font.size = Pt(13)
     r.font.color.rgb = color
-    h.paragraph_format.space_before = Pt(10)
+    h.paragraph_format.space_before = Pt(14)
     h.paragraph_format.space_after = Pt(4)
 
 def generate_docx_bytes(data: dict, theme: str) -> bytes:
@@ -91,12 +99,18 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
 
     doc = Document()
 
+    # Apply global font (Calibri / Georgia style)
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(10.5)
+
     # Page margins
     for sec in doc.sections:
-        sec.top_margin = Inches(0.65)
-        sec.bottom_margin = Inches(0.65)
-        sec.left_margin = Inches(0.85)
-        sec.right_margin = Inches(0.85)
+        sec.top_margin = Inches(0.7)
+        sec.bottom_margin = Inches(0.7)
+        sec.left_margin = Inches(0.8)
+        sec.right_margin = Inches(0.8)
 
     # ── NAME / CONTACT HEADER ──────────────────────────────
     name = data.get("Name", "").strip() or "Your Name"
@@ -107,10 +121,10 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
 
     name_para = doc.add_paragraph()
     name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    name_para.paragraph_format.space_after = Pt(3)
+    name_para.paragraph_format.space_after = Pt(4)
     nr = name_para.add_run(name)
     nr.bold = True
-    nr.font.size = Pt(28)
+    nr.font.size = Pt(26)
     nr.font.color.rgb = heading_color
 
     # Contact line
@@ -126,34 +140,33 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
 
     if contact_parts:
         cr = contact_para.add_run("  |  ".join(contact_parts))
-        cr.font.size = Pt(9.5)
-        cr.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+        cr.font.size = Pt(10)
+        cr.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
 
     # Hyperlinks for email / LinkedIn
     link_para = doc.add_paragraph()
     link_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    link_para.paragraph_format.space_after = Pt(10)
+    link_para.paragraph_format.space_after = Pt(6)
 
     if email:
         _add_hyperlink(link_para, f"mailto:{email}", email, accent_color)
     if email and linkedin:
         sp = link_para.add_run("   |   ")
-        sp.font.size = Pt(9.5)
+        sp.font.size = Pt(10)
         sp.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
     if linkedin:
         url = linkedin if linkedin.startswith("http") else f"https://{linkedin}"
         _add_hyperlink(link_para, url, linkedin, accent_color)
 
-    _separator(doc)
+    _separator(doc, accent_color, thickness_pt=1.5)
 
     # ── PROFESSIONAL SUMMARY ───────────────────────────────
     _section_heading(doc, "Professional Summary", heading_color)
     sp = doc.add_paragraph(data.get("Summary", ""))
+    sp.paragraph_format.space_after = Pt(10)
+    sp.paragraph_format.line_spacing = 1.15
     for r in sp.runs:
         r.font.size = Pt(10.5)
-    sp.paragraph_format.space_after = Pt(8)
-
-    _separator(doc)
 
     # ── PROFESSIONAL EXPERIENCE ────────────────────────────
     _section_heading(doc, "Professional Experience", heading_color)
@@ -162,47 +175,47 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
         role_para = doc.add_paragraph()
         role_para.paragraph_format.space_before = Pt(8)
         role_para.paragraph_format.space_after = Pt(1)
+        
+        # Job Title left aligned, Company inline
         rr = role_para.add_run(exp.get("Role", "Professional"))
         rr.bold = True
-        rr.font.size = Pt(11)
+        rr.font.size = Pt(11.5)
         rr.font.color.rgb = sub_color
 
         company_run = role_para.add_run(f"  ·  {exp.get('Company', '')}")
-        company_run.font.size = Pt(10.5)
-        company_run.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+        company_run.font.size = Pt(11)
+        company_run.font.color.rgb = RGBColor(0x44, 0x44, 0x44)
 
         dur = exp.get("Duration", "")
         if dur:
             dp = doc.add_paragraph()
             dp.paragraph_format.space_before = Pt(0)
-            dp.paragraph_format.space_after = Pt(3)
+            dp.paragraph_format.space_after = Pt(4)
             dr = dp.add_run(dur)
             dr.italic = True
-            dr.font.size = Pt(9)
-            dr.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+            dr.font.size = Pt(9.5)
+            dr.font.color.rgb = RGBColor(0x77, 0x77, 0x77)
 
         for ach in exp.get("Achievements", []):
             bp = doc.add_paragraph(style="List Bullet")
             bp.clear()
-            bp.paragraph_format.space_before = Pt(1)
-            bp.paragraph_format.space_after = Pt(1)
-            bp.paragraph_format.left_indent = Inches(0.3)
+            bp.paragraph_format.space_before = Pt(2)
+            bp.paragraph_format.space_after = Pt(2)
+            bp.paragraph_format.line_spacing = 1.15
+            bp.paragraph_format.left_indent = Inches(0.25)
             ar = bp.add_run(str(ach))
             ar.font.size = Pt(10)
 
-    _separator(doc)
-
-    # ── KEY SKILLS  (two-column table for non-ATS themes) ──
+    # ── KEY SKILLS ─────────────────────────────────────────
     _section_heading(doc, "Key Skills", heading_color)
     skills = data.get("Skills", [])
 
     if theme == "ATS-Friendly":
-        # Plain comma-separated for maximum parser compatibility
         sp2 = doc.add_paragraph(", ".join(skills))
+        sp2.paragraph_format.space_after = Pt(10)
         for r in sp2.runs:
             r.font.size = Pt(10.5)
     else:
-        # Two-column table
         if skills:
             half = (len(skills) + 1) // 2
             left_col = skills[:half]
@@ -225,21 +238,23 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
             for i, skill in enumerate(left_col):
                 cell = table.cell(i, 0)
                 cell.text = f"•  {skill}"
+                cell.paragraphs[0].paragraph_format.space_after = Pt(2)
                 for run in cell.paragraphs[0].runs:
                     run.font.size = Pt(10)
             for i, skill in enumerate(right_col):
                 cell = table.cell(i, 1)
                 cell.text = f"•  {skill}"
+                cell.paragraphs[0].paragraph_format.space_after = Pt(2)
                 for run in cell.paragraphs[0].runs:
                     run.font.size = Pt(10)
-
-    _separator(doc)
 
     # ── EDUCATION & CERTIFICATIONS ─────────────────────────
     _section_heading(doc, "Education & Certifications", heading_color)
     for edu in data.get("Education", []):
         ep = doc.add_paragraph(style="List Bullet")
         ep.clear()
+        ep.paragraph_format.space_before = Pt(2)
+        ep.paragraph_format.space_after = Pt(2)
         er = ep.add_run(str(edu))
         er.font.size = Pt(10.5)
 
