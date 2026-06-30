@@ -2,6 +2,8 @@ import io
 import logging
 from typing import Any
 
+import re
+
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
@@ -11,6 +13,12 @@ from docx.shared import Inches, Pt, RGBColor
 from core.prompts import THEME_COLORS
 
 logger = logging.getLogger("resume_architect")
+
+def _clean(text: Any) -> str:
+    """Removes XML-incompatible control characters."""
+    if text is None:
+        return ""
+    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', str(text))
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
     try:
@@ -119,7 +127,7 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
         sec.right_margin = Inches(0.8)
 
     # ── HEADER: NAME & CONTACT ──────────────────────────────
-    name = data.get("Name", "").strip() or "Your Name"
+    name = _clean(data.get("Name", "").strip() or "Your Name")
     name_para = doc.add_paragraph()
     name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     name_para.paragraph_format.space_after = Pt(2)
@@ -130,10 +138,10 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
     nr.font.color.rgb = heading_color
 
     contact_parts = []
-    if data.get("Location"): contact_parts.append(data.get("Location").strip())
-    if data.get("Phone"): contact_parts.append(data.get("Phone").strip())
-    if data.get("Email"): contact_parts.append(data.get("Email").strip())
-    if data.get("LinkedIn"): contact_parts.append(data.get("LinkedIn").strip())
+    if data.get("Location"): contact_parts.append(_clean(data.get("Location").strip()))
+    if data.get("Phone"): contact_parts.append(_clean(data.get("Phone").strip()))
+    if data.get("Email"): contact_parts.append(_clean(data.get("Email").strip()))
+    if data.get("LinkedIn"): contact_parts.append(_clean(data.get("LinkedIn").strip()))
 
     if contact_parts:
         contact_para = doc.add_paragraph()
@@ -156,7 +164,7 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
     # ── PROFESSIONAL SUMMARY ───────────────────────────────
     if data.get("Summary"):
         _section_heading(doc, "Professional Summary", heading_color)
-        sp = doc.add_paragraph(data.get("Summary", ""))
+        sp = doc.add_paragraph(_clean(data.get("Summary", "")))
         sp.paragraph_format.space_before = Pt(6)
         sp.paragraph_format.space_after = Pt(10)
         sp.paragraph_format.line_spacing = 1.2
@@ -178,9 +186,9 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
         tab_stops = role_para.paragraph_format.tab_stops
         tab_stops.add_tab_stop(Inches(6.9), WD_TAB_ALIGNMENT.RIGHT)
 
-        role = exp.get("Role", "Professional")
-        company = exp.get("Company", "")
-        duration = exp.get("Duration", "")
+        role = _clean(exp.get("Role", "Professional"))
+        company = _clean(exp.get("Company", ""))
+        duration = _clean(exp.get("Duration", ""))
 
         # Role & Company (Left)
         rr = role_para.add_run(role)
@@ -218,7 +226,7 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
             bullet.font.name = 'Arial'
             bullet.font.size = Pt(10)
             
-            ar = bp.add_run(str(ach).strip())
+            ar = bp.add_run(_clean(str(ach).strip()))
             ar.font.size = Pt(10)
             ar.font.name = 'Georgia'
 
@@ -235,7 +243,7 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
         sp2.paragraph_format.line_spacing = 1.3
         sp2.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         
-        skills_run = sp2.add_run(" • ".join(skills))
+        skills_run = sp2.add_run(" • ".join([_clean(s) for s in skills]))
         skills_run.font.size = Pt(10)
         skills_run.font.name = 'Georgia'
         skills_run.font.bold = True
@@ -252,7 +260,7 @@ def generate_docx_bytes(data: dict, theme: str) -> bytes:
             ep.paragraph_format.left_indent = Inches(0.15)
             
             # Format: split by " - " or "|" if generated that way, or just bold the whole line
-            er = ep.add_run(str(edu))
+            er = ep.add_run(_clean(str(edu)))
             er.bold = True
             er.font.size = Pt(10.5)
             er.font.name = 'Georgia'
