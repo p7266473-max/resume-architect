@@ -76,7 +76,7 @@ def _separator(doc: Document, color: RGBColor, thickness_pt: float = 1.0) -> Non
     bottom.set(qn('w:val'), 'single')
     bottom.set(qn('w:sz'), str(int(thickness_pt * 8)))  # sz is in 1/8 pt
     bottom.set(qn('w:space'), '1')
-    bottom.set(qn('w:color'), "{:02X}{:02X}{:02X}".format(color.rgb[0], color.rgb[1], color.rgb[2]))
+    bottom.set(qn('w:color'), "{:02X}{:02X}{:02X}".format(*color))
     pBdr.append(bottom)
     pPr.append(pBdr)
 
