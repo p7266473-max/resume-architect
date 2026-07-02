@@ -69,11 +69,12 @@ def run_research_pass(
     client: genai.Client,
     target_roles: list[str],
     status_ph: Any,
+    selected_stream: str = "BSc Computer Science / IT",
 ) -> str:
     """Pass 0: Use Google Search to find the best free courses/certifications for the target roles."""
     roles_str = ", ".join(target_roles)
     contents = (
-        f"The user is a BSc Computer Science student aiming to become one of the following in 2-3 years: {roles_str}.\n\n"
+        f"The user is a {selected_stream} student aiming to become one of the following in 2-3 years: {roles_str}.\n\n"
         "Search the web for the absolute best, highly-recognized FREE or open-source online courses, bootcamps, and certifications "
         "(e.g., from freeCodeCamp, Harvard CS50, AWS Educate, Google Cloud Skill Boost, DeepLearning.AI via financial aid, OSSU) "
         "that are mandatory or highly recommended for these specific roles. Summarize the best 3-5 free courses they should take."
@@ -95,6 +96,8 @@ def run_extraction_pass(
     target_roles: list[str],
     research_summary: str,
     status_ph: Any,
+    selected_stream: str = "BSc Computer Science / IT",
+    degree_placeholder: str = "Bachelor of Science in Computer Science",
 ) -> Optional[dict]:
     """Pass 1: Generate the Future Resume JSON based on selected roles and free course research."""
     prompt = PASS1_USER_TEMPLATE.format(
@@ -102,10 +105,16 @@ def run_extraction_pass(
         target_roles=", ".join(target_roles)
     )
 
+    system_instruction = PASS1_SYSTEM_PROMPT.replace(
+        "BSc Computer Science", selected_stream
+    ).replace(
+        "Bachelor of Science in Computer Science", degree_placeholder
+    )
+
     result_text = call_gemini_with_retry(
         client=client,
         prompt=prompt,
-        system_instruction=PASS1_SYSTEM_PROMPT,
+        system_instruction=system_instruction,
         response_schema=RESUME_SCHEMA,
         status_ph=status_ph
     )

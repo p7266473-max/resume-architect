@@ -375,13 +375,108 @@ st.sidebar.markdown(
 )
 
 # ============================================================
+# STREAM DATA
+# ============================================================
+
+STREAM_DATA = {
+    "BSc Computer Science / IT": {
+        "roles": [
+            "Software Engineer (Backend)",
+            "Software Engineer (Frontend)",
+            "Full Stack Developer",
+            "Data Scientist / ML Engineer",
+            "Data Analyst",
+            "Cloud Architect / Cloud Engineer",
+            "DevOps Engineer",
+            "Cybersecurity Analyst",
+            "Mobile App Developer (iOS/Android)",
+            "Game Developer",
+            "Blockchain Developer"
+        ],
+        "degree_placeholder": "Bachelor of Science in Computer Science"
+    },
+    "BTech / BEng (Engineering)": {
+        "roles": [
+            "Mechanical Engineer",
+            "Civil Engineer",
+            "Electrical Engineer",
+            "Electronics & Communication Engineer",
+            "Robotics & Automation Engineer",
+            "Embedded Systems Engineer",
+            "Chemical Engineer",
+            "Structural Engineer",
+            "Project Engineer"
+        ],
+        "degree_placeholder": "Bachelor of Technology / Engineering"
+    },
+    "BCom / BBA (Business & Commerce)": {
+        "roles": [
+            "Management Consultant",
+            "Financial Analyst",
+            "Investment Banking Analyst",
+            "Business Analyst",
+            "Marketing Specialist",
+            "Digital Marketing Manager",
+            "HR Specialist / Recruiter",
+            "Operations Associate",
+            "Product Manager"
+        ],
+        "degree_placeholder": "Bachelor of Business Administration / Commerce"
+    },
+    "BA (Arts & Humanities)": {
+        "roles": [
+            "Content Writer / Strategist",
+            "UX Writer",
+            "Public Relations Specialist",
+            "Policy Analyst",
+            "Journalist / Reporter",
+            "HR Operations Executive",
+            "Social Media Strategist",
+            "Technical Writer"
+        ],
+        "degree_placeholder": "Bachelor of Arts"
+    },
+    "BDes (Design)": {
+        "roles": [
+            "UI/UX Designer",
+            "Product Designer",
+            "Graphic Designer",
+            "Interaction Designer",
+            "Fashion Designer",
+            "Interior Designer",
+            "Creative Director"
+        ],
+        "degree_placeholder": "Bachelor of Design"
+    },
+    "BSc (General & Life Sciences)": {
+        "roles": [
+            "Research Assistant / Scientist",
+            "Biotechnologist",
+            "Bioinformatics Analyst",
+            "Environmental Consultant",
+            "Clinical Research Coordinator",
+            "Lab Technician",
+            "Healthcare Administrator"
+        ],
+        "degree_placeholder": "Bachelor of Science"
+    }
+}
+
+# ============================================================
 # MAIN INPUT AREA
 # ============================================================
 
+st.markdown("### 🎓 Academic Stream")
+selected_stream = st.selectbox(
+    "Choose your undergraduate degree stream:",
+    options=list(STREAM_DATA.keys())
+)
+
 st.markdown("### 🎯 Career Goals")
+available_roles = STREAM_DATA[selected_stream]["roles"]
 selected_roles = st.multiselect(
-    "What do you want to become after you graduate? (Select 1 to 3)",
-    options=CAREER_OPTIONS,
+    f"What do you want to become after you graduate with a {selected_stream}? (Select 1 to 3)",
+    options=available_roles,
     max_selections=3,
     placeholder="Choose your target roles..."
 )
@@ -429,12 +524,19 @@ if build_clicked:
     # Web Research Grounding Pass
     progress.progress(5, text="Web Research: Finding the best free courses…")
     with st.spinner("Searching the web for top free/open-source certifications for your path…"):
-        research_summary = run_research_pass(client, selected_roles, status)
+        research_summary = run_research_pass(client, selected_roles, status, selected_stream)
 
     # Pass 1
     progress.progress(15, text="Pass 1: Architecting your future resume…")
     with st.spinner("Building your 3-year career trajectory…"):
-        extracted = run_extraction_pass(client, selected_roles, research_summary, status)
+        extracted = run_extraction_pass(
+            client,
+            selected_roles,
+            research_summary,
+            status,
+            selected_stream,
+            STREAM_DATA[selected_stream]["degree_placeholder"]
+        )
 
     if extracted is None:
         progress.progress(100, text="Pipeline failed.")
